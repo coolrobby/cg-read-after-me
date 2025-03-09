@@ -58,7 +58,7 @@ def get_txt_files():
     return [f for f in os.listdir() if f.endswith(".txt") and f != "requirements.txt"]
 
 # 生成HTML点读卡页面
-def generate_flashcard_html(audio_files, text_lines):
+def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
     html_content = """
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -95,14 +95,19 @@ def generate_flashcard_html(audio_files, text_lines):
                 font-size: 2rem;
                 color: #333;
             }
+            .chinese {
+                font-size: 1.5rem; /* 中文字体比英文小 */
+                color: #555;
+                margin-top: 5px;
+            }
             audio {
                 display: none;
             }
             .watermark {
                 position: absolute;
                 bottom: 5px;
-                right: 15px; /* 增加右边距 */
-                font-size: 1rem; /* 修改为1rem */
+                right: 15px;
+                font-size: 1rem;
                 color: #888;
                 font-family: "Times New Roman", serif;
             }
@@ -112,15 +117,29 @@ def generate_flashcard_html(audio_files, text_lines):
         <div class="card-container">
     """
     
-    for i, (audio_file, text) in enumerate(zip(audio_files, text_lines)):
-        audio_path = os.path.basename(audio_file)
-        html_content += f"""
-            <div class="card" onclick="document.getElementById('audio_{i}').play()">
-                <h1>{text}</h1>
-                <audio id="audio_{i}" src="{audio_path}"></audio>
-                <div class="watermark">设计制作: 川哥</div>
-            </div>
-        """
+    if is_txt_input:
+        for i, audio_file in enumerate(audio_files):
+            audio_path = os.path.basename(audio_file)
+            english_text = text_lines[i * 2]  # 每组第一行（英文）
+            chinese_text = text_lines[i * 2 + 1]  # 每组第二行（中文）
+            html_content += f"""
+                <div class="card" onclick="document.getElementById('audio_{i}').play()">
+                    <h1>{english_text}</h1>
+                    <div class="chinese">{chinese_text}</div>
+                    <audio id="audio_{i}" src="{audio_path}"></audio>
+                    <div class="watermark">设计制作: 川哥</div>
+                </div>
+            """
+    else:
+        for i, (audio_file, text) in enumerate(zip(audio_files, text_lines)):
+            audio_path = os.path.basename(audio_file)
+            html_content += f"""
+                <div class="card" onclick="document.getElementById('audio_{i}').play()">
+                    <h1>{text}</h1>
+                    <audio id="audio_{i}" src="{audio_path}"></audio>
+                    <div class="watermark">设计制作: 川哥</div>
+                </div>
+            """
     
     html_content += """
         </div>
@@ -133,7 +152,7 @@ def generate_flashcard_html(audio_files, text_lines):
     return os.path.join(OUTPUT_DIR, "flashcard.html")
 
 # 生成text_list.html页面
-def generate_text_list_html(text_lines):
+def generate_text_list_html(text_lines, is_txt_input=False):
     html_content = """
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -155,6 +174,11 @@ def generate_text_list_html(text_lines):
                 font-size: 2rem;
                 color: #333;
             }
+            .chinese {
+                font-size: 1.5rem; /* 中文字体比英文小 */
+                color: #555;
+                margin-top: 5px;
+            }
             hr {
                 border: 0;
                 border-top: 1px solid #ccc;
@@ -166,11 +190,21 @@ def generate_text_list_html(text_lines):
         <div class="list-container">
     """
     
-    for text in text_lines:
-        html_content += f"""
-            <h1>{text}</h1>
-            <hr>
-        """
+    if is_txt_input:
+        for i in range(0, len(text_lines), 2):
+            english_text = text_lines[i]
+            chinese_text = text_lines[i + 1]
+            html_content += f"""
+                <h1>{english_text}</h1>
+                <div class="chinese">{chinese_text}</div>
+                <hr>
+            """
+    else:
+        for text in text_lines:
+            html_content += f"""
+                <h1>{text}</h1>
+                <hr>
+            """
     
     html_content += """
         </div>
@@ -184,7 +218,7 @@ def generate_text_list_html(text_lines):
 
 # 主程序
 def main():
-    st.title("生成英语点读卡")
+    st.title("文字转语音 - Edge-TTS")
     
     # 清空之前的输出
     clear_output_dir()
@@ -215,7 +249,7 @@ def main():
                         asyncio.run(text_to_speech(expanded_line, voice, speed, output_file))
                         audio_files.append(output_file)
                         text_lines.append(line.strip())  # 显示原始文本
-                        
+    
     else:
         txt_files = get_txt_files()
         if not txt_files:
@@ -225,24 +259,42 @@ def main():
             if st.button("生成音频"):
                 with open(selected_file, "r", encoding="utf-8") as f:
                     lines = f.readlines()
-                for i, line in enumerate(lines):
-                    if line.strip():
-                        expanded_line = expand_abbreviations(line.strip())
-                        output_file = os.path.join(OUTPUT_DIR, f"audio_{i+1}.mp3")
-                        asyncio.run(text_to_speech(expanded_line, voice, speed, output_file))
-                        audio_files.append(output_file)
-                        text_lines.append(line.strip())  # 显示原始文本
+                # 确保行数为偶数（每两行一组）
+                if len(lines) % 2 != 0:
+                    st.error("TXT文件行数必须为偶数（每两行一组：英文+中文）")
+                else:
+                    for i in range(0, len(lines), 2):
+                        english_line = lines[i].strip()
+                        chinese_line = lines[i + 1].strip()
+                        if english_line and chinese_line:
+                            expanded_english = expand_abbreviations(english_line)
+                            output_file = os.path.join(OUTPUT_DIR, f"audio_{i//2 + 1}.mp3")
+                            asyncio.run(text_to_speech(expanded_english, voice, speed, output_file))
+                            audio_files.append(output_file)
+                            text_lines.append(english_line)  # 保存英文
+                            text_lines.append(chinese_line)  # 保存中文
     
     # 显示和播放单独的音频文件
     if audio_files:
         st.subheader("生成的音频文件")
-        for i, audio_file in enumerate(audio_files):
-            st.markdown(f"<h1 style='font-family: \"Times New Roman\", serif;'>{text_lines[i]}</h1>", unsafe_allow_html=True)
-            st.audio(audio_file)
+        if input_method == "直接输入":
+            for i, audio_file in enumerate(audio_files):
+                st.markdown(f"<h1 style='font-family: \"Times New Roman\", serif;'>{text_lines[i]}</h1>", unsafe_allow_html=True)
+                st.audio(audio_file)
+        else:
+            for i, audio_file in enumerate(audio_files):
+                english_text = text_lines[i * 2]
+                chinese_text = text_lines[i * 2 + 1]
+                st.markdown(
+                    f"<h1 style='font-family: \"Times New Roman\", serif;'>{english_text}</h1>"
+                    f"<div style='font-family: \"Times New Roman\", serif; font-size: 1.5rem; color: #555; margin-top: 5px;'>{chinese_text}</div>",
+                    unsafe_allow_html=True
+                )
+                st.audio(audio_file)
         
         # 生成两个HTML文件
-        flashcard_html = generate_flashcard_html(audio_files, text_lines)
-        text_list_html = generate_text_list_html(text_lines)
+        flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=(input_method == "从TXT文件读取"))
+        text_list_html = generate_text_list_html(text_lines, is_txt_input=(input_method == "从TXT文件读取"))
         
         # 创建下载包
         zip_file = "audio_package_设计制作：川哥.zip"
