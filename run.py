@@ -219,7 +219,7 @@ def generate_text_list_html(text_lines, is_txt_input=False):
 
 # 主程序
 def main():
-    st.title("文字转语音 - Edge-TTS")
+    st.title("英语点读卡生成器")
     
     # 音色选择
     voice_name = st.selectbox("选择音色", list(VOICES.keys()))
