@@ -5,17 +5,16 @@ import shutil
 import zipfile
 import asyncio
 
-# 设置输出目录
-OUTPUT_DIR = "output_audio"
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
-
-# 清理输出目录
-def clear_output_dir():
-    for file in os.listdir(OUTPUT_DIR):
-        file_path = os.path.join(OUTPUT_DIR, file)
-        if os.path.isfile(file_path):
-            os.unlink(file_path)
+# 清理输出文件（仅清理特定文件，避免影响其他文件）
+def clear_output_files(audio_files, text_file, html_files):
+    for file in audio_files:
+        if os.path.isfile(file):
+            os.unlink(file)
+    for file in html_files:
+        if os.path.isfile(file):
+            os.unlink(file)
+    if os.path.isfile(text_file):
+        os.unlink(text_file)
 
 # 常见的英文音色选项
 VOICES = {
@@ -147,9 +146,10 @@ def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
     </html>
     """
     
-    with open(os.path.join(OUTPUT_DIR, "flashcard.html"), "w", encoding="utf-8") as f:
+    flashcard_file = "flashcard.html"
+    with open(flashcard_file, "w", encoding="utf-8") as f:
         f.write(html_content)
-    return os.path.join(OUTPUT_DIR, "flashcard.html")
+    return flashcard_file
 
 # 生成text_list.html页面
 def generate_text_list_html(text_lines, is_txt_input=False):
@@ -212,16 +212,14 @@ def generate_text_list_html(text_lines, is_txt_input=False):
     </html>
     """
     
-    with open(os.path.join(OUTPUT_DIR, "text_list.html"), "w", encoding="utf-8") as f:
+    text_list_file = "text_list.html"
+    with open(text_list_file, "w", encoding="utf-8") as f:
         f.write(html_content)
-    return os.path.join(OUTPUT_DIR, "text_list.html")
+    return text_list_file
 
 # 主程序
 def main():
     st.title("文字转语音 - Edge-TTS")
-    
-    # 清空之前的输出
-    clear_output_dir()
     
     # 音色选择
     voice_name = st.selectbox("选择音色", list(VOICES.keys()))
@@ -246,7 +244,7 @@ def main():
                 for i, line in enumerate(lines):
                     if line.strip():
                         expanded_line = expand_abbreviations(line.strip())
-                        output_file = os.path.join(OUTPUT_DIR, f"audio_{i+1}.mp3")
+                        output_file = f"audio_{i+1}.mp3"
                         asyncio.run(text_to_speech(expanded_line, voice, speed, output_file))
                         audio_files.append(output_file)
                         text_lines.append(line.strip())  # 显示原始文本
@@ -270,7 +268,7 @@ def main():
                         chinese_line = lines[i + 1].strip()
                         if english_line and chinese_line:
                             expanded_english = expand_abbreviations(english_line)
-                            output_file = os.path.join(OUTPUT_DIR, f"audio_{i//2 + 1}.mp3")
+                            output_file = f"audio_{i//2 + 1}.mp3"
                             asyncio.run(text_to_speech(expanded_english, voice, speed, output_file))
                             audio_files.append(output_file)
                             text_lines.append(english_line)  # 保存英文
@@ -300,16 +298,18 @@ def main():
         flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=(input_method == "从TXT文件读取"))
         text_list_html = generate_text_list_html(text_lines, is_txt_input=(input_method == "从TXT文件读取"))
         
+        # 创建文本列表文件
+        text_list_txt = "text_list.txt"
+        with open(text_list_txt, "w", encoding="utf-8") as f:
+            f.write("\n".join(text_lines))
+        
         # 创建下载包
         with zipfile.ZipFile(zip_filename, 'w') as zipf:
             # 添加单独的音频文件
             for audio_file in audio_files:
                 zipf.write(audio_file)
-            # 添加文本列表
-            with open(os.path.join(OUTPUT_DIR, "text_list.txt"), "w", encoding="utf-8") as f:
-                f.write("\n".join(text_lines))
-            zipf.write(os.path.join(OUTPUT_DIR, "text_list.txt"))
-            # 添加两个HTML文件
+            # 添加文本列表和HTML文件
+            zipf.write(text_list_txt)
             zipf.write(flashcard_html)
             zipf.write(text_list_html)
         
@@ -321,6 +321,9 @@ def main():
                 file_name=zip_filename,
                 mime="application/zip"
             )
+        
+        # 清理生成的文件（避免影响下次运行）
+        clear_output_files(audio_files, text_list_txt, [flashcard_html, text_list_html])
 
 if __name__ == "__main__":
     main()
