@@ -53,9 +53,9 @@ async def text_to_speech(text, voice, speed, output_file):
     communicate = edge_tts.Communicate(text, voice, rate=speed)
     await communicate.save(output_file)
 
-# 获取当前目录下的所有txt文件
+# 获取当前目录下的所有txt文件，排除requirements.txt
 def get_txt_files():
-    return [f for f in os.listdir() if f.endswith(".txt")]
+    return [f for f in os.listdir() if f.endswith(".txt") and f != "requirements.txt"]
 
 # 生成HTML点读卡页面
 def generate_flashcard_html(audio_files, text_lines):
@@ -101,8 +101,8 @@ def generate_flashcard_html(audio_files, text_lines):
             .watermark {
                 position: absolute;
                 bottom: 5px;
-                right: 5px;
-                font-size: 0.5rem;
+                right: 15px; /* 增加右边距 */
+                font-size: 1rem; /* 修改为1rem */
                 color: #888;
                 font-family: "Times New Roman", serif;
             }
