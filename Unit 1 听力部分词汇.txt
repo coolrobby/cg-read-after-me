@@ -1,47 +1,20 @@
 pick sb. up
+开车接某人
 pick on
+故意刁难
 pick at
+少量地吃；挑剔
 interested
+ adj. 感兴趣的
 interesting
+ adj. 有趣的
 interest
+ n. 兴趣；利益；利息
 interest
+ v. 使感兴趣
 invite
+ v. 邀请；请求；招致
 invitation
+ n. 邀请；请柬
 cycling club
-I'll pick you up at the train station at 3 o'clock this afternoon.
-Why do you always pick on me?
-She just picked at her food.
-I am interested in reading books.
-This book is very interesting.
-He has an interest in music.
-The story interests me.
-He invited me to his party.
-I received an invitation to the wedding.
-I joined the cycling club last month.
-He will pick his wife up from the airport after work.
-Mom, please pick me up at the library when you're free.
-I'm running late, but I'll pick him up as soon as I can.
-Why do you always pick on the new students?
-I don't know why they pick on me every time there's a problem.
-Teachers should not pick on students in front of the whole class.
-He just picked at his dinner and didn't seem hungry.
-She always picks at her clothes and finds something wrong with them.
-The little boy picked at the food on his plate.
-He is interested in playing basketball.
-She is interested in watching movies.
-They are interested in learning about history.
-This movie is very interesting.
-The story he told us is really interesting.
-The book about animals is quite interesting.
-He shows great interest in science.
-The story interests the children.
-She has an interest in painting.
-She invited her friends to her birthday party.
-He invited me to have dinner with him.
-They invited the famous singer to perform at the concert.
-I got an invitation to the concert.
-She sent out many invitations to her classmates.
-He received an invitation to give a speech at the meeting.
-Many students joined the cycling club this year.
-He often goes cycling with the members of the cycling club.
-The cycling club organized a long - distance cycling activity.
+自行车俱乐部
