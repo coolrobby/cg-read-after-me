@@ -2,7 +2,6 @@ import streamlit as st
 import edge_tts
 import os
 import shutil
-from pydub import AudioSegment
 import zipfile
 import asyncio
 
@@ -41,6 +40,71 @@ async def text_to_speech(text, voice, speed, output_file):
 # 获取当前目录下的所有txt文件
 def get_txt_files():
     return [f for f in os.listdir() if f.endswith(".txt")]
+
+# 生成HTML点读卡页面
+def generate_html(audio_files, text_lines):
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <title>点读卡</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f0f0f0;
+                margin: 0;
+                padding: 20px;
+            }
+            .card-container {
+                max-width: 800px;
+                margin: 0 auto;
+            }
+            .card {
+                background-color: white;
+                border-radius: 10px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                margin-bottom: 20px;
+                padding: 20px;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+            .card:hover {
+                transform: scale(1.02);
+                background-color: #e0f7fa;
+            }
+            h1 {
+                margin: 0;
+                font-size: 24px;
+                color: #333;
+            }
+            audio {
+                display: none;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="card-container">
+    """
+    
+    for i, (audio_file, text) in enumerate(zip(audio_files, text_lines)):
+        audio_path = os.path.basename(audio_file)
+        html_content += f"""
+            <div class="card" onclick="document.getElementById('audio_{i}').play()">
+                <h1>{text}</h1>
+                <audio id="audio_{i}" src="{audio_path}"></audio>
+            </div>
+        """
+    
+    html_content += """
+        </div>
+    </body>
+    </html>
+    """
+    
+    with open(os.path.join(OUTPUT_DIR, "flashcard.html"), "w", encoding="utf-8") as f:
+        f.write(html_content)
+    return os.path.join(OUTPUT_DIR, "flashcard.html")
 
 # 主程序
 def main():
@@ -98,17 +162,15 @@ def main():
             st.markdown(f"<h1>{text_lines[i]}</h1>", unsafe_allow_html=True)
             st.audio(audio_file)
         
-        # 合并音频文件
-        combined = AudioSegment.empty()
-        for audio_file in audio_files:
-            sound = AudioSegment.from_mp3(audio_file)
-            combined += sound
-        
-        combined_file = os.path.join(OUTPUT_DIR, "combined_audio.mp3")
-        combined.export(combined_file, format="mp3")
-        
-        st.subheader("合并后的音频")
-        st.audio(combined_file)
+        # 生成HTML点读卡
+        html_file = generate_html(audio_files, text_lines)
+        with open(html_file, "r", encoding="utf-8") as f:
+            st.download_button(
+                label="下载HTML点读卡",
+                data=f,
+                file_name="flashcard.html",
+                mime="text/html"
+            )
         
         # 创建下载包
         zip_file = "audio_package.zip"
@@ -116,17 +178,17 @@ def main():
             # 添加单独的音频文件
             for audio_file in audio_files:
                 zipf.write(audio_file)
-            # 添加合并的音频文件
-            zipf.write(combined_file)
             # 添加文本列表
             with open(os.path.join(OUTPUT_DIR, "text_list.txt"), "w", encoding="utf-8") as f:
                 f.write("\n".join(text_lines))
             zipf.write(os.path.join(OUTPUT_DIR, "text_list.txt"))
+            # 添加HTML文件
+            zipf.write(html_file)
         
         # 提供下载按钮
         with open(zip_file, "rb") as f:
             st.download_button(
-                label="下载所有音频文件",
+                label="下载所有文件（音频+单词列表+HTML）",
                 data=f,
                 file_name="audio_package.zip",
                 mime="application/zip"
