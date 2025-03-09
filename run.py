@@ -218,7 +218,7 @@ def generate_text_list_html(text_lines, is_txt_input=False):
 
 # 主程序
 def main():
-    st.title("文字转语音 - Edge-TTS")
+    st.title("生成英文点读卡")
     
     # 清空之前的输出
     clear_output_dir()
