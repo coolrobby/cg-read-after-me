@@ -32,6 +32,22 @@ SPEED_OPTIONS = {
     "Slow": "-20%"     # 慢速（减慢20%）
 }
 
+# 缩写转换字典
+ABBREVIATIONS = {
+    "sb.": "somebody",
+    "sth.": "something",
+    "smb.": "somebody",
+    "smt.": "something",
+    "e.g.": "for example",
+    "i.e.": "that is"
+}
+
+# 转换缩写为全写
+def expand_abbreviations(text):
+    for abbr, full in ABBREVIATIONS.items():
+        text = text.replace(abbr, full)
+    return text
+
 # 生成语音文件
 async def text_to_speech(text, voice, speed, output_file):
     communicate = edge_tts.Communicate(text, voice, rate=speed)
@@ -42,7 +58,7 @@ def get_txt_files():
     return [f for f in os.listdir() if f.endswith(".txt")]
 
 # 生成HTML点读卡页面
-def generate_html(audio_files, text_lines):
+def generate_flashcard_html(audio_files, text_lines):
     html_content = """
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -51,7 +67,7 @@ def generate_html(audio_files, text_lines):
         <title>点读卡</title>
         <style>
             body {
-                font-family: Arial, sans-serif;
+                font-family: "Times New Roman", serif;
                 background-color: #f0f0f0;
                 margin: 0;
                 padding: 20px;
@@ -61,6 +77,7 @@ def generate_html(audio_files, text_lines):
                 margin: 0 auto;
             }
             .card {
+                position: relative;
                 background-color: white;
                 border-radius: 10px;
                 box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -75,11 +92,19 @@ def generate_html(audio_files, text_lines):
             }
             h1 {
                 margin: 0;
-                font-size: 24px;
+                font-size: 2rem;
                 color: #333;
             }
             audio {
                 display: none;
+            }
+            .watermark {
+                position: absolute;
+                bottom: 5px;
+                right: 5px;
+                font-size: 0.5rem;
+                color: #888;
+                font-family: "Times New Roman", serif;
             }
         </style>
     </head>
@@ -93,6 +118,7 @@ def generate_html(audio_files, text_lines):
             <div class="card" onclick="document.getElementById('audio_{i}').play()">
                 <h1>{text}</h1>
                 <audio id="audio_{i}" src="{audio_path}"></audio>
+                <div class="watermark">设计制作: 川哥</div>
             </div>
         """
     
@@ -105,6 +131,56 @@ def generate_html(audio_files, text_lines):
     with open(os.path.join(OUTPUT_DIR, "flashcard.html"), "w", encoding="utf-8") as f:
         f.write(html_content)
     return os.path.join(OUTPUT_DIR, "flashcard.html")
+
+# 生成text_list.html页面
+def generate_text_list_html(text_lines):
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <title>文本列表</title>
+        <style>
+            body {
+                font-family: "Times New Roman", serif;
+                background-color: #f0f0f0;
+                margin: 0;
+                padding: 20px;
+            }
+            .list-container {
+                max-width: 800px;
+                margin: 0 auto;
+            }
+            h1 {
+                font-size: 2rem;
+                color: #333;
+            }
+            hr {
+                border: 0;
+                border-top: 1px solid #ccc;
+                margin: 10px 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="list-container">
+    """
+    
+    for text in text_lines:
+        html_content += f"""
+            <h1>{text}</h1>
+            <hr>
+        """
+    
+    html_content += """
+        </div>
+    </body>
+    </html>
+    """
+    
+    with open(os.path.join(OUTPUT_DIR, "text_list.html"), "w", encoding="utf-8") as f:
+        f.write(html_content)
+    return os.path.join(OUTPUT_DIR, "text_list.html")
 
 # 主程序
 def main():
@@ -134,10 +210,11 @@ def main():
                 lines = user_input.strip().split("\n")
                 for i, line in enumerate(lines):
                     if line.strip():
+                        expanded_line = expand_abbreviations(line.strip())
                         output_file = os.path.join(OUTPUT_DIR, f"audio_{i+1}.mp3")
-                        asyncio.run(text_to_speech(line.strip(), voice, speed, output_file))
+                        asyncio.run(text_to_speech(expanded_line, voice, speed, output_file))
                         audio_files.append(output_file)
-                        text_lines.append(line.strip())
+                        text_lines.append(line.strip())  # 显示原始文本
                         
     else:
         txt_files = get_txt_files()
@@ -150,30 +227,25 @@ def main():
                     lines = f.readlines()
                 for i, line in enumerate(lines):
                     if line.strip():
+                        expanded_line = expand_abbreviations(line.strip())
                         output_file = os.path.join(OUTPUT_DIR, f"audio_{i+1}.mp3")
-                        asyncio.run(text_to_speech(line.strip(), voice, speed, output_file))
+                        asyncio.run(text_to_speech(expanded_line, voice, speed, output_file))
                         audio_files.append(output_file)
-                        text_lines.append(line.strip())
+                        text_lines.append(line.strip())  # 显示原始文本
     
     # 显示和播放单独的音频文件
     if audio_files:
         st.subheader("生成的音频文件")
         for i, audio_file in enumerate(audio_files):
-            st.markdown(f"<h1>{text_lines[i]}</h1>", unsafe_allow_html=True)
+            st.markdown(f"<h1 style='font-family: \"Times New Roman\", serif;'>{text_lines[i]}</h1>", unsafe_allow_html=True)
             st.audio(audio_file)
         
-        # 生成HTML点读卡
-        html_file = generate_html(audio_files, text_lines)
-        with open(html_file, "r", encoding="utf-8") as f:
-            st.download_button(
-                label="下载HTML点读卡",
-                data=f,
-                file_name="flashcard.html",
-                mime="text/html"
-            )
+        # 生成两个HTML文件
+        flashcard_html = generate_flashcard_html(audio_files, text_lines)
+        text_list_html = generate_text_list_html(text_lines)
         
         # 创建下载包
-        zip_file = "audio_package.zip"
+        zip_file = "audio_package_设计制作：川哥.zip"
         with zipfile.ZipFile(zip_file, 'w') as zipf:
             # 添加单独的音频文件
             for audio_file in audio_files:
@@ -182,15 +254,16 @@ def main():
             with open(os.path.join(OUTPUT_DIR, "text_list.txt"), "w", encoding="utf-8") as f:
                 f.write("\n".join(text_lines))
             zipf.write(os.path.join(OUTPUT_DIR, "text_list.txt"))
-            # 添加HTML文件
-            zipf.write(html_file)
+            # 添加两个HTML文件
+            zipf.write(flashcard_html)
+            zipf.write(text_list_html)
         
         # 提供下载按钮
         with open(zip_file, "rb") as f:
             st.download_button(
                 label="下载所有文件（音频+单词列表+HTML）",
                 data=f,
-                file_name="audio_package.zip",
+                file_name="audio_package_设计制作：川哥.zip",
                 mime="application/zip"
             )
 
