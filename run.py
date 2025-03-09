@@ -218,7 +218,7 @@ def generate_text_list_html(text_lines, is_txt_input=False):
 
 # 主程序
 def main():
-    st.title("生成英文点读卡")
+    st.title("文字转语音 - Edge-TTS")
     
     # 清空之前的输出
     clear_output_dir()
@@ -236,6 +236,7 @@ def main():
     
     audio_files = []
     text_lines = []
+    zip_filename = "英语单词点读卡-设计制作：川哥.zip"  # 默认文件名
     
     if input_method == "直接输入":
         user_input = st.text_area("输入你的文本（每行生成一个音频文件）")
@@ -249,6 +250,7 @@ def main():
                         asyncio.run(text_to_speech(expanded_line, voice, speed, output_file))
                         audio_files.append(output_file)
                         text_lines.append(line.strip())  # 显示原始文本
+                zip_filename = "英语单词点读卡-设计制作：川哥.zip"
     
     else:
         txt_files = get_txt_files()
@@ -273,6 +275,8 @@ def main():
                             audio_files.append(output_file)
                             text_lines.append(english_line)  # 保存英文
                             text_lines.append(chinese_line)  # 保存中文
+                    # 使用TXT文件名（去掉.txt）作为ZIP文件名
+                    zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
     
     # 显示和播放单独的音频文件
     if audio_files:
@@ -297,8 +301,7 @@ def main():
         text_list_html = generate_text_list_html(text_lines, is_txt_input=(input_method == "从TXT文件读取"))
         
         # 创建下载包
-        zip_file = "audio_package_设计制作：川哥.zip"
-        with zipfile.ZipFile(zip_file, 'w') as zipf:
+        with zipfile.ZipFile(zip_filename, 'w') as zipf:
             # 添加单独的音频文件
             for audio_file in audio_files:
                 zipf.write(audio_file)
@@ -311,11 +314,11 @@ def main():
             zipf.write(text_list_html)
         
         # 提供下载按钮
-        with open(zip_file, "rb") as f:
+        with open(zip_filename, "rb") as f:
             st.download_button(
                 label="下载所有文件（音频+单词列表+HTML）",
                 data=f,
-                file_name="audio_package_设计制作：川哥.zip",
+                file_name=zip_filename,
                 mime="application/zip"
             )
 
