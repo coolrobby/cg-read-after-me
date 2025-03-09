@@ -4,6 +4,7 @@ import os
 import shutil
 from pydub import AudioSegment
 import zipfile
+import asyncio
 
 # 设置输出目录
 OUTPUT_DIR = "output_audio"
@@ -26,10 +27,10 @@ VOICES = {
     "Ryan (en-GB)": "en-GB-RyanNeural"
 }
 
-# 速度选项
+# 速度选项（改为edge-tts支持的百分比格式）
 SPEED_OPTIONS = {
-    "Normal": "1.0",
-    "Slow": "0.8"
+    "Normal": "+0%",   # 默认速度
+    "Slow": "-20%"     # 慢速（减慢20%）
 }
 
 # 生成语音文件
@@ -43,35 +44,34 @@ def get_txt_files():
 
 # 主程序
 def main():
-    st.title("Text to Speech with Edge-TTS")
+    st.title("文字转语音 - Edge-TTS")
     
     # 清空之前的输出
     clear_output_dir()
     
     # 音色选择
-    voice_name = st.selectbox("Select Voice", list(VOICES.keys()))
+    voice_name = st.selectbox("选择音色", list(VOICES.keys()))
     voice = VOICES[voice_name]
     
     # 速度选择
-    speed_name = st.selectbox("Select Speed", list(SPEED_OPTIONS.keys()))
+    speed_name = st.selectbox("选择速度", list(SPEED_OPTIONS.keys()))
     speed = SPEED_OPTIONS[speed_name]
     
     # 输入方式选择
-    input_method = st.radio("Choose Input Method", ("Direct Input", "From TXT Files"))
+    input_method = st.radio("选择输入方式", ("直接输入", "从TXT文件读取"))
     
     audio_files = []
     text_lines = []
     
-    if input_method == "Direct Input":
-        user_input = st.text_area("Enter your text (one line per audio file)")
-        if st.button("Generate Audio"):
+    if input_method == "直接输入":
+        user_input = st.text_area("输入你的文本（每行生成一个音频文件）")
+        if st.button("生成音频"):
             if user_input:
                 lines = user_input.strip().split("\n")
                 for i, line in enumerate(lines):
                     if line.strip():
                         output_file = os.path.join(OUTPUT_DIR, f"audio_{i+1}.mp3")
-                        st.write(f"Generating: {line}")
-                        import asyncio
+                        st.write(f"正在生成: {line}")
                         asyncio.run(text_to_speech(line.strip(), voice, speed, output_file))
                         audio_files.append(output_file)
                         text_lines.append(line.strip())
@@ -79,26 +79,25 @@ def main():
     else:
         txt_files = get_txt_files()
         if not txt_files:
-            st.warning("No TXT files found in the current directory!")
+            st.warning("当前目录下没有找到TXT文件！")
         else:
-            selected_file = st.selectbox("Select a TXT file", txt_files)
-            if st.button("Generate Audio"):
+            selected_file = st.selectbox("选择一个TXT文件", txt_files)
+            if st.button("生成音频"):
                 with open(selected_file, "r", encoding="utf-8") as f:
                     lines = f.readlines()
                 for i, line in enumerate(lines):
                     if line.strip():
                         output_file = os.path.join(OUTPUT_DIR, f"audio_{i+1}.mp3")
-                        st.write(f"Generating: {line}")
-                        import asyncio
+                        st.write(f"正在生成: {line}")
                         asyncio.run(text_to_speech(line.strip(), voice, speed, output_file))
                         audio_files.append(output_file)
                         text_lines.append(line.strip())
     
     # 显示和播放单独的音频文件
     if audio_files:
-        st.subheader("Generated Audio Files")
+        st.subheader("生成的音频文件")
         for i, audio_file in enumerate(audio_files):
-            st.write(f"Line {i+1}: {text_lines[i]}")
+            st.write(f"第 {i+1} 行: {text_lines[i]}")
             st.audio(audio_file)
         
         # 合并音频文件
@@ -110,7 +109,7 @@ def main():
         combined_file = os.path.join(OUTPUT_DIR, "combined_audio.mp3")
         combined.export(combined_file, format="mp3")
         
-        st.subheader("Combined Audio")
+        st.subheader("合并后的音频")
         st.audio(combined_file)
         
         # 创建下载包
@@ -129,7 +128,7 @@ def main():
         # 提供下载按钮
         with open(zip_file, "rb") as f:
             st.download_button(
-                label="Download All Audio Files",
+                label="下载所有音频文件",
                 data=f,
                 file_name="audio_package.zip",
                 mime="application/zip"
