@@ -27,7 +27,7 @@ VOICES = {
     "Ryan (en-GB)": "en-GB-RyanNeural"
 }
 
-# 速度选项（改为edge-tts支持的百分比格式）
+# 速度选项（edge-tts支持的百分比格式）
 SPEED_OPTIONS = {
     "Normal": "+0%",   # 默认速度
     "Slow": "-20%"     # 慢速（减慢20%）
@@ -71,7 +71,6 @@ def main():
                 for i, line in enumerate(lines):
                     if line.strip():
                         output_file = os.path.join(OUTPUT_DIR, f"audio_{i+1}.mp3")
-                        st.write(f"正在生成: {line}")
                         asyncio.run(text_to_speech(line.strip(), voice, speed, output_file))
                         audio_files.append(output_file)
                         text_lines.append(line.strip())
@@ -88,7 +87,6 @@ def main():
                 for i, line in enumerate(lines):
                     if line.strip():
                         output_file = os.path.join(OUTPUT_DIR, f"audio_{i+1}.mp3")
-                        st.write(f"正在生成: {line}")
                         asyncio.run(text_to_speech(line.strip(), voice, speed, output_file))
                         audio_files.append(output_file)
                         text_lines.append(line.strip())
@@ -97,7 +95,7 @@ def main():
     if audio_files:
         st.subheader("生成的音频文件")
         for i, audio_file in enumerate(audio_files):
-            st.write(f"第 {i+1} 行: {text_lines[i]}")
+            st.markdown(f"<h1>{text_lines[i]}</h1>", unsafe_allow_html=True)
             st.audio(audio_file)
         
         # 合并音频文件
