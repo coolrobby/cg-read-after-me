@@ -22,7 +22,12 @@ VOICES = {
     "Jenny (en-US)": "en-US-JennyNeural",
     "Ana (en-US)": "en-US-AnaNeural",
     "Emma (en-GB)": "en-GB-EmmaNeural",
-    "Ryan (en-GB)": "en-GB-RyanNeural"
+    "Ryan (en-GB)": "en-GB-RyanNeural",
+    "Xiaoxiao (zh-CN)": "zh-CN-XiaoxiaoNeural",  # 女声，清亮自然
+    "Yunyang (zh-CN)": "zh-CN-YunyangNeural",  # 男声，沉稳有力
+    "Yunxi (zh-CN)": "zh-CN-YunxiNeural",      # 男声，年轻活泼
+    "Xiaohan (zh-CN)": "zh-CN-XiaohanNeural",  # 女声，温柔甜美
+    "Yunjian (zh-CN)": "zh-CN-YunjianNeural"   # 男声，专业播音风格
 }
 
 # 速度选项（edge-tts支持的百分比格式）
