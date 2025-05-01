@@ -120,12 +120,12 @@ def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
     <body>
         <div class="card-container">
     """
-    
+
     if is_txt_input:
-        for i, audio_file in enumerate(audio_files):
+        for i, audio_file in enumerate(audio_files, start=100):
             audio_path = os.path.basename(audio_file)
-            english_text = text_lines[i * 2]  # 每组第一行（英文）
-            chinese_text = text_lines[i * 2 + 1]  # 每组第二行（中文）
+            english_text = text_lines[(i - 100) * 2]  # 每组第一行（英文）
+            chinese_text = text_lines[(i - 100) * 2 + 1]  # 每组第二行（中文）
             html_content += f"""
                 <div class="card" onclick="document.getElementById('audio_{i}').play()">
                     <h1>{english_text}</h1>
@@ -135,7 +135,7 @@ def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
                 </div>
             """
     else:
-        for i, (audio_file, text) in enumerate(zip(audio_files, text_lines)):
+        for i, (audio_file, text) in enumerate(zip(audio_files, text_lines), start=100):
             audio_path = os.path.basename(audio_file)
             html_content += f"""
                 <div class="card" onclick="document.getElementById('audio_{i}').play()">
@@ -144,13 +144,13 @@ def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
                     <div class="watermark">设计制作: 川哥</div>
                 </div>
             """
-    
+
     html_content += """
         </div>
     </body>
     </html>
     """
-    
+
     flashcard_file = "flashcard.html"
     with open(flashcard_file, "w", encoding="utf-8") as f:
         f.write(html_content)
@@ -194,7 +194,7 @@ def generate_text_list_html(text_lines, is_txt_input=False):
     <body>
         <div class="list-container">
     """
-    
+
     if is_txt_input:
         for i in range(0, len(text_lines), 2):
             english_text = text_lines[i]
@@ -210,13 +210,13 @@ def generate_text_list_html(text_lines, is_txt_input=False):
                 <h1>{text}</h1>
                 <hr>
             """
-    
+
     html_content += """
         </div>
     </body>
     </html>
     """
-    
+
     text_list_file = "text_list.html"
     with open(text_list_file, "w", encoding="utf-8") as f:
         f.write(html_content)
@@ -225,36 +225,36 @@ def generate_text_list_html(text_lines, is_txt_input=False):
 # 主程序
 def main():
     st.title("英语点读卡生成器")
-    
+
     # 音色选择
     voice_name = st.selectbox("选择音色", list(VOICES.keys()))
     voice = VOICES[voice_name]
-    
+
     # 速度选择
     speed_name = st.selectbox("选择速度", list(SPEED_OPTIONS.keys()))
     speed = SPEED_OPTIONS[speed_name]
-    
+
     # 输入方式选择
     input_method = st.radio("选择输入方式", ("直接输入", "从TXT文件读取"))
-    
+
     audio_files = []
     text_lines = []
     zip_filename = "英语单词点读卡-设计制作：川哥.zip"  # 默认文件名
-    
+
     if input_method == "直接输入":
         user_input = st.text_area("输入你的文本（每行生成一个音频文件）")
         if st.button("生成音频"):
             if user_input:
                 lines = user_input.strip().split("\n")
-                for i, line in enumerate(lines):
+                for i, line in enumerate(lines, start=100):
                     if line.strip():
                         expanded_line = expand_abbreviations(line.strip())
-                        output_file = f"audio_{i+1}.mp3"
+                        output_file = f"{i}.mp3"
                         asyncio.run(text_to_speech(expanded_line, voice, speed, output_file))
                         audio_files.append(output_file)
                         text_lines.append(line.strip())  # 显示原始文本
                 zip_filename = "英语单词点读卡-设计制作：川哥.zip"
-    
+
     else:
         txt_files = get_txt_files()
         if not txt_files:
@@ -269,45 +269,46 @@ def main():
                     st.error("TXT文件行数必须为偶数（每两行一组：英文+中文）")
                 else:
                     for i in range(0, len(lines), 2):
+                        index = i // 2 + 100
                         english_line = lines[i].strip()
                         chinese_line = lines[i + 1].strip()
                         if english_line and chinese_line:
                             expanded_english = expand_abbreviations(english_line)
-                            output_file = f"audio_{i//2 + 1}.mp3"
+                            output_file = f"{index}.mp3"
                             asyncio.run(text_to_speech(expanded_english, voice, speed, output_file))
                             audio_files.append(output_file)
                             text_lines.append(english_line)  # 保存英文
                             text_lines.append(chinese_line)  # 保存中文
                     # 使用TXT文件名（去掉.txt）作为ZIP文件名
                     zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
-    
+
     # 显示和播放单独的音频文件
     if audio_files:
         st.subheader("生成的音频文件")
         if input_method == "直接输入":
-            for i, audio_file in enumerate(audio_files):
-                st.markdown(f"<h1 style='font-family: \"Times New Roman\", serif;'>{text_lines[i]}</h1>", unsafe_allow_html=True)
+            for i, audio_file in enumerate(audio_files, start=100):
+                st.markdown(f"<h1 style='font-family: \"Times New Roman\", serif;'>{text_lines[i - 100]}</h1>", unsafe_allow_html=True)
                 st.audio(audio_file)
         else:
-            for i, audio_file in enumerate(audio_files):
-                english_text = text_lines[i * 2]
-                chinese_text = text_lines[i * 2 + 1]
+            for i, audio_file in enumerate(audio_files, start=100):
+                english_text = text_lines[(i - 100) * 2]
+                chinese_text = text_lines[(i - 100) * 2 + 1]
                 st.markdown(
                     f"<h1 style='font-family: \"Times New Roman\", serif;'>{english_text}</h1>"
                     f"<div style='font-family: \"Times New Roman\", serif; font-size: 1.5rem; color: #555; margin-top: 5px;'>{chinese_text}</div>",
                     unsafe_allow_html=True
                 )
                 st.audio(audio_file)
-        
+
         # 生成两个HTML文件
         flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=(input_method == "从TXT文件读取"))
         text_list_html = generate_text_list_html(text_lines, is_txt_input=(input_method == "从TXT文件读取"))
-        
+
         # 创建文本列表文件
         text_list_txt = "text_list.txt"
         with open(text_list_txt, "w", encoding="utf-8") as f:
             f.write("\n".join(text_lines))
-        
+
         # 创建下载包
         with zipfile.ZipFile(zip_filename, 'w') as zipf:
             # 添加单独的音频文件
@@ -317,7 +318,7 @@ def main():
             zipf.write(text_list_txt)
             zipf.write(flashcard_html)
             zipf.write(text_list_html)
-        
+
         # 提供下载按钮
         with open(zip_filename, "rb") as f:
             st.download_button(
@@ -326,7 +327,7 @@ def main():
                 file_name=zip_filename,
                 mime="application/zip"
             )
-        
+
         # 清理生成的文件（避免影响下次运行）
         clear_output_files(audio_files, text_list_txt, [flashcard_html, text_list_html])
 
