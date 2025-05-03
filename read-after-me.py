@@ -27,7 +27,19 @@ VOICES = {
     "Yunyang (zh-CN)": "zh-CN-YunyangNeural",  # 男声，沉稳有力
     "Yunxi (zh-CN)": "zh-CN-YunxiNeural",      # 男声，年轻活泼
     "Xiaohan (zh-CN)": "zh-CN-XiaohanNeural",  # 女声，温柔甜美
-    "Yunjian (zh-CN)": "zh-CN-YunjianNeural"   # 男声，专业播音风格
+    "Yunjian (zh-CN)": "zh-CN-YunjianNeural",   # 男声，专业播音风格
+    "Ava (en-US Multilingual)": "en-US-AvaMultilingualNeural",
+    "Emma (en-US Multilingual)": "en-US-EmmaMultilingualNeural",
+    "Sonia (en-GB)": "en-GB-SoniaNeural",
+    "Carly (en-AU)": "en-AU-CarlyMultilingualNeural",
+    "Xiaoyi (zh-CN)": "zh-CN-XiaoyiNeural",  # 女声，活泼
+    "Yunye (zh-CN)": "zh-CN-YunyeNeural",    # 男声，成熟
+    "Xiaomeng (zh-CN)": "zh-CN-XiaomengNeural",  # 女声，可爱
+    "Tom (en-US)": "en-US-TomNeural",
+    "Amy (en-GB)": "en-GB-AmyNeural",
+    "David (en-GB)": "en-GB-DavidNeural",
+    "Linda (en-US)": "en-US-LindaNeural",
+    "Mark (en-US)": "en-US-MarkNeural"
 }
 
 # 速度选项（edge-tts支持的百分比格式）
