@@ -45,7 +45,7 @@ VOICES = {
 # 速度选项（edge-tts支持的百分比格式）
 SPEED_OPTIONS = {
     "Normal": "+0%",   # 默认速度
-    "Slow": "-20%"     # 慢速（减慢20%）
+    "Slow": "-40%"     # 慢速（减慢20%）
 }
 
 # 缩写转换字典
@@ -143,7 +143,7 @@ def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
                     <h1>{english_text}</h1>
                     <div class="chinese">{chinese_text}</div>
                     <audio id="audio_{i}" src="{audio_path}"></audio>
-                    <div class="watermark">设计制作: 川哥</div>
+                    <div class="watermark">川哥</div>
                 </div>
             """
     else:
