@@ -5,7 +5,7 @@ adv.紧急的
 confirm
 v.确认
 confirmation
-N.确认
+n.确认
 represent
 v.代表
 representative
