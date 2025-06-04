@@ -1,0 +1,270 @@
+organization
+n. 组织；机构
+PE
+n. 体育
+express
+v./adj. 表达；快递
+earn
+v. 赚得
+retell
+v. 重述
+wake
+v. 醒来；唤醒
+wonder
+v. 想知道
+believe
+v. 相信
+kick
+v. 踢
+seem
+v. 似乎
+cancel
+v. 取消
+operate
+v. 经营，营业，活动
+suggest
+v. 建议，提议
+add
+v. 加
+damage
+v. 毁坏
+hire
+v. 雇佣
+encourage
+v. 鼓励
+pronounce
+v. 发音
+publish
+v. 发表，出版
+represent
+v. 代表
+interview
+v. 采访
+fail
+v. 不及格，未能通过
+switch
+v. n. 转换；开关
+nod
+v. n. 点头
+rush
+v. n. 匆忙；匆忙
+achieve
+v. （凭长期努力）达到（某目标、地位、标准）
+yours
+pron. 你的
+above
+prep., adv. 在...上面
+during
+prep. 在...期间
+throughout
+prep. 贯穿整个
+value
+n./v. 价值；估价
+aim
+n., v. 目标；瞄准
+state
+n. 州，国家
+quality
+n. 质量，品质
+pillow
+n. 枕头
+truth
+n. 真相
+giraffe
+n. 长颈鹿
+length
+n. 长度
+luck
+n. 运气；幸运
+appointment
+n. 约会，预约，约定
+budget
+n. 预算
+raincoat
+n. 雨衣
+meal
+n. 一餐
+night
+n. 夜晚
+speech
+n. 演讲
+choice
+n. 选择
+demand
+n. 需求
+planet
+n. 行星
+habit
+n. 习惯
+diploma
+n. 文凭
+temperature
+n. 温度
+tail
+n. 尾巴
+scarf
+n. 围巾
+network
+n. 网络
+library
+n. 图书馆
+headache
+n. 头痛
+pain
+n. 疼痛，痛苦
+figure
+n. 数字
+quantity
+n. 数量 (在订单中往往缩写成Qty)
+view
+n. 视野，景色
+timetable
+n. 时间表
+voice
+n. 声音；嗓音
+birthday
+n. 生日
+community
+n. 社区，社会团体
+district
+n. 区域，地区
+zone
+n. 区域，地带
+mosque
+n. 清真寺
+youth
+n. 青年时期
+balloon
+n. 气球
+wood
+n. 木材，木头
+board
+n. 木板
+secretary
+n. 秘书，书记员
+dream
+n. 梦
+blanket
+n. 毛毯
+zero
+n. 零
+contact
+n. 联系人
+union
+n. 联盟；工会
+club
+n. 俱乐部，夜总会
+ambulance
+n. 救护车
+mirror
+n. 镜子
+traffic
+n. 交通
+furniture
+n. 家具
+jacket
+n. 夹克
+memory
+n. 记忆
+environment
+n. 环境
+flight
+n. 航班
+coast
+n. 海岸
+audience
+n. 观众
+risk
+n. 风险
+manner
+n. 方式
+judge
+n. 法官
+zoo
+n. 动物园
+electricity
+n. 电力
+island
+n. 岛屿
+guidebook
+n. 导游书，旅游指南
+university
+n. 大学
+village
+n. 村
+kitchen
+n. 厨房
+label
+n. 标签
+must
+n. 必须做（或看、买等）的事
+hobby
+n. 爱好
+X-ray
+n. X光
+shade
+n. v. 遮光；阴凉
+reason
+n. v. 原因；理由
+number
+n. v. 数字；编号
+screen
+n. v. 屏幕；筛选
+type
+n. v. 类型；打字
+influence
+n. / v. 影响
+enough
+/pron./adv. 足够的；充足的
+while
+conj./n. 当……时；一段时间
+just
+adv. 只是
+yet
+adv. 还
+soon
+adv. 不久，很快
+wet
+adj./v. 湿的；弄湿
+either
+adj./adv./pron. 任一；两者中的一个
+humorous
+adj. 幽默的
+fond
+adj. 喜爱的
+used
+adj. 习惯于的；使用过的
+popular
+adj. 受欢迎的
+ill
+adj. 生病的
+certain
+adj. 确定的
+kind
+adj. 亲切的
+odd
+adj. 奇数的；奇怪的
+ordinary
+adj. 普通的
+cute
+adj. 可爱的
+thick
+adj. 厚的
+grateful
+adj. 感激的
+general
+adj. 大体的，大致的
+wrong
+adj. 错误的
+ugly
+adj. 丑陋的
+silent
+adj. 沉默的
+opposite
+adj. n. 相对的；对立的
+official
+adj. n. 官方的；官员
+native
+adj. n. 本地的；本国人
+quiet
+adj. n. 安静的；安静
