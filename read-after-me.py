@@ -143,7 +143,7 @@ def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
                     <h1>{english_text}</h1>
                     <div class="chinese">{chinese_text}</div>
                     <audio id="audio_{i}" src="{audio_path}"></audio>
-                    <div class="watermark">川哥</div>
+                    <div class="watermark">FLD</div>
                 </div>
             """
     else:
@@ -153,7 +153,7 @@ def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
                 <div class="card" onclick="document.getElementById('audio_{i}').play()">
                     <h1>{text}</h1>
                     <audio id="audio_{i}" src="{audio_path}"></audio>
-                    <div class="watermark">设计制作: 川哥</div>
+                    <div class="watermark">FLD</div>
                 </div>
             """
     
