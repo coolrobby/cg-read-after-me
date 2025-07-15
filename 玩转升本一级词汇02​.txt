@@ -1,20 +1,40 @@
 discount
+n./vt. 折扣
 impact
+n./v. 影响
 decrease
+v./n. 减少
 percent
+n. 百分比,百分之
 select
+vt. 选择
 objective
+n./adj. 目标；客观的
 prefer
+vt. 更喜欢
 facility
+n. 设施
 optimistic
+adj. 乐观的
 factor
+n. 因素
 advertise
+v. 做广告
 tradition
+n. 传统
 particular
+adj. 特别的
 structure
+n. 结构
 energy
+n. 能源；精力
 adequate
+adj. 足够的
 silent
+adj. 沉默的
 suppose
+vt. 假设
 enable
+vt. 使能够
 region
+n. 地区

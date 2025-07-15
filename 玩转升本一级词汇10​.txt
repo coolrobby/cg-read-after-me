@@ -1,20 +1,40 @@
 senior
+adj. 高级的；年长的
 document
+n. 文件
 previous
+adj. 先前的
 topic
+n. 话题
 influence
+n./vt. 影响
 memory
+n. 记忆力;记忆
 situation
+n. 情况
 convince
+vt. 说服
 achieve
+v. 实现
 predict
+vt. 预测
 threat
+n. 威胁
 urban
+adj. 城市的
 remote
+adj. 偏远的
 aspect
+n. 方面
 abroad
+adv. 在国外
 invest
+v. 投资
 specific
+adj. 具体的
 purchase
+vt./n. 购买
 communication
+n. 沟通
 require
+vt. 要求

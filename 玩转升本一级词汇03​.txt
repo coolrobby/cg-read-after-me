@@ -1,20 +1,40 @@
 aid
+n./v. 帮助
 label
+n./vt. 标签；贴标签
 admit
+v. 承认；准许进入
 damage
+n./vt. 损害
 deny
+v. 否认
 hardly
+adv. 几乎不;才
 resource
+n. 资源
 primary
+adj. 主要的；初级的
 negotiate
+v. 谈判
 process
+n./vt. 过程；处理
 sensitive
+adj. 敏感的
 attitude
+n. 态度
 symbol
+n. 象征
 adopt
+v. 采用
 adjust
+v. 调整
 trend
+n. 趋势
 visual
+adj. 视觉的
 available
+adj. 可获得的
 debate
+n./v. 辩论
 industry
+n. 工业

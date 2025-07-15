@@ -1,20 +1,40 @@
 currency
+n. 货币
 donate
+v. 捐赠
 schedule
+n./vt. 时间表；安排
 spend
+v. 花费
 refuse
+v. 拒绝
 zone
+n. 区域
 global
+adj. 全球的
 response
+n. 回应
 possible
+adj. 可能的
 poverty
+n. 贫困
 minimum
+n./adj. 最小值；最小的
 widespread
+adj. 广泛的
 mutual
+adj. 相互的
 effective
+adj. 有效的
 media
+n. 媒体
 solution
+n. 解决方案
 responsible
+adj. 负责的
 devote
+v. 致力于
 apologize
+v. 道歉
 similar
+adj. 相似的
