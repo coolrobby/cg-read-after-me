@@ -1,0 +1,47 @@
+engineer
+manager
+salesclerk
+analyst
+assistant
+bank clerk
+chief engineer
+chief executive officer
+clerk
+consultant
+coworker
+designer
+developer
+director
+doctor
+driver
+employee
+engineer
+fashion designer
+HR manager
+HR manager assistant
+human resources manager
+lawyer
+manager
+nurse
+office director
+officer
+office secretary
+secretary
+waiter
+sales assistant
+programmer
+personal assistant
+senior manager
+cashier
+chef
+cook
+co-worker
+firefighter
+headteacher
+pilot
+artist
+specialist
+supervisor
+teacher
+worker
+sales manager
