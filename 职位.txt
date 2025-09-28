@@ -1,47 +1,94 @@
 engineer
+工程师
 manager
+经理；管理者
 salesclerk
+售货员；店员
 analyst
+分析师
 assistant
+助手，助理
 bank clerk
+银行职员
 chief engineer
+首席工程师
 chief executive officer
+首席执行官
 clerk
+职员
 consultant
+顾问
 coworker
+同事
 designer
+设计师
 developer
+开发者
 director
+负责人，主管
 doctor
+医生
 driver
+司机
 employee
+员工
 engineer
+工程师
 fashion designer
+时尚设计师
 HR manager
+人力资源经理
 HR manager assistant
+人力资源经理助理
 human resources manager
+人力资源经理
 lawyer
+律师
 manager
+经理
 nurse
+护士
 office director
+办公室主任
 officer
+（政府或大机构的）官员，高级职员
 office secretary
+办公室秘书
 secretary
+秘书
 waiter
+男服务员
 sales assistant
+销售助理
 programmer
+程序员
 personal assistant
+私人助理
 senior manager
+高级经理
 cashier
+收银员
 chef
+厨师
 cook
+厨师
 co-worker
+同事
 firefighter
+消防员
 headteacher
+校长
 pilot
+飞行员
 artist
+艺术家
 specialist
+专家
 supervisor
+主管
 teacher
+教师
 worker
+工人
 sales manager
+销售经理
