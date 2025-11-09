@@ -1,10 +1,12 @@
 import streamlit as st
-from gtts import gTTS
+import edge_tts
 import os
 import zipfile
+import asyncio
+import concurrent.futures
 from typing import List
 import time
-import io  # 用于内存中生成音频
+import random  # 用于随机 pitch 变体重试
 
 # -------------------------------------------------
 # 1. 清理函数（安全删除）
@@ -18,18 +20,36 @@ def clear_output_files(audio_files, text_file, html_files):
             pass
 
 # -------------------------------------------------
-# 2. 常量（移除 VOICES 中的 zh-CN，gTTS 支持有限；英文优先）
+# 2. 常量（恢复原 VOICES）
 # -------------------------------------------------
-VOICES = {  # gTTS 语音选项（英文为主，lang='en' 或 'zh'）
-    "en-US (Female)": "en",
-    "en-GB (Female)": "en",
-    "en-US (Male)": "en",  # gTTS 无严格男女区分，但可通过 tld 调整
-    "zh-CN (Female)": "zh",
+VOICES = {
+    "Guy (en-US)": "en-US-GuyNeural",
+    "Jenny (en-US)": "en-US-JennyNeural",
+    "Ana (en-US)": "en-US-AnaNeural",
+    "Emma (en-GB)": "en-GB-EmmaNeural",
+    "Ryan (en-GB)": "en-GB-RyanNeural",
+    "Xiaoxiao (zh-CN)": "zh-CN-XiaoxiaoNeural",
+    "Yunyang (zh-CN)": "zh-CN-YunyangNeural",
+    "Yunxi (zh-CN)": "zh-CN-YunxiNeural",
+    "Xiaohan (zh-CN)": "zh-CN-XiaohanNeural",
+    "Yunjian (zh-CN)": "zh-CN-YunjianNeural",
+    "Ava (en-US Multilingual)": "en-US-AvaMultilingualNeural",
+    "Emma (en-US Multilingual)": "en-US-EmmaMultilingualNeural",
+    "Sonia (en-GB)": "en-GB-SoniaNeural",
+    "Carly (en-AU)": "en-AU-CarlyMultilingualNeural",
+    "Xiaoyi (zh-CN)": "zh-CN-XiaoyiNeural",
+    "Yunye (zh-CN)": "zh-CN-YunyeNeural",
+    "Xiaomeng (zh-CN)": "zh-CN-XiaomengNeural",
+    "Tom (en-US)": "en-US-TomNeural",
+    "Amy (en-GB)": "en-GB-AmyNeural",
+    "David (en-GB)": "en-GB-DavidNeural",
+    "Linda (en-US)": "en-US-LindaNeural",
+    "Mark (en-US)": "en-US-MarkNeural",
 }
 
-SPEED_OPTIONS = {  # gTTS 无直接速度控制，用 slow=True 模拟慢速
-    "Normal": False,
-    "Slow": True,
+SPEED_OPTIONS = {
+    "Normal": "+0%",
+    "Slow": "-20%",
 }
 
 ABBREVIATIONS = {
@@ -53,41 +73,75 @@ def get_txt_files() -> List[str]:
     return [f for f in os.listdir() if f.endswith(".txt") and f != "requirements.txt"]
 
 # -------------------------------------------------
-# 4. 生成单条音频（gTTS 同步，简单可靠）
+# 4. 异步生成单条音频（带重试）
 # -------------------------------------------------
-def generate_one_audio(text: str, lang: str, slow: bool, output_file: str) -> bool:
+async def generate_one_audio(text: str, voice: str, speed: str, output_file: str, max_retries: int = 3) -> bool:
     if not text.strip():
         return False
-    try:
-        text = expand_abbreviations(text)
-        tts = gTTS(text=text, lang=lang, slow=slow)
-        # 保存到文件
-        tts.save(output_file)
-        # 检查文件是否生成且非空
-        if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
-            return True
-        else:
-            if os.path.exists(output_file):
-                os.remove(output_file)
+    text = expand_abbreviations(text)
+    for attempt in range(max_retries):
+        try:
+            # 随机 pitch 变体（+0Hz 到 +2Hz），帮助避开 API 问题
+            pitch = f"+{random.randint(0, 2)}Hz"
+            communicate = edge_tts.Communicate(text, voice, rate=speed, pitch=pitch)
+            await communicate.save(output_file)
+            # 检查文件是否生成且非空
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                return True
+            else:
+                if os.path.exists(output_file):
+                    os.remove(output_file)
+        except edge_tts.exceptions.NoAudioReceived:
+            st.warning(f"尝试 {attempt + 1} 失败 (NoAudioReceived)，重试中...")
+            if attempt == max_retries - 1:
+                st.error(f"生成 {output_file} 失败：API 返回空音频。请检查网络或尝试其他语音。")
+                return False
+            await asyncio.sleep(1)  # 等待 1s 后重试
+        except Exception as e:
+            st.error(f"生成 {output_file} 出错（尝试 {attempt + 1}）：{str(e)}")
             return False
-    except Exception as e:
-        st.error(f"生成音频失败（{output_file}）：{str(e)}")
-        return False
+    return False
 
 # -------------------------------------------------
-# 5. 批量生成音频（同步，带进度条）
+# 5. 使用线程池执行异步任务
 # -------------------------------------------------
-def generate_audios_batch(text_list: List[str], lang: str, slow: bool, start_idx: int = 100, progress_bar=None) -> List[str]:
+@st.cache_resource
+def get_executor():
+    return concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+def run_async_task(coro):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        result = future.result(timeout=60)  # 每个音频超时 60s
+        return result
+    except concurrent.futures.TimeoutError:
+        st.warning("生成超时")
+        return False
+    except Exception as e:
+        st.error(f"异步任务出错：{str(e)}")
+        return False
+    finally:
+        loop.close()
+
+def generate_audios_batch(text_list: List[str], voice: str, speed: str, start_idx: int = 100, progress_bar=None) -> List[str]:
     audio_files = []
+    executor = get_executor()
     for i, text in enumerate(text_list):
         out_file = f"{start_idx + i}.mp3"
         if progress_bar:
             progress_bar.progress((i + 1) / len(text_list))
-            st.rerun()  # 刷新 UI 更新进度
-        success = generate_one_audio(text, lang, slow, out_file)
+            status = st.empty()
+            status.text(f"生成中：{text[:30]}...")
+            st.rerun()
+        # 异步生成
+        coro = generate_one_audio(text, voice, speed, out_file)
+        success = run_async_task(coro)
         if success:
             audio_files.append(out_file)
-        time.sleep(0.5)  # 避免请求过频（Google 有率限）
+        time.sleep(0.5)  # 避免率限
+    executor.shutdown(wait=False)
     return audio_files
 
 # -------------------------------------------------
@@ -157,13 +211,15 @@ hr{border:0;border-top:1px solid #ccc;margin:10px 0}
 # 7. 主函数
 # -------------------------------------------------
 def main():
-    st.title("英语点读卡生成器")
+    st.title("英语点读卡生成器（Edge TTS）")
 
-    voice_name = st.selectbox("选择语言（语音）", list(VOICES.keys()))
-    lang = VOICES[voice_name]
+    st.info("⚠️ 注意：Edge TTS 在 Cloud 环境可能偶发 NoAudioReceived 错误（Microsoft API 限制）。建议本地运行或短文本测试。最新版本 (7.2.3+) 已优化。")
+
+    voice_name = st.selectbox("选择音色", list(VOICES.keys()))
+    voice = VOICES[voice_name]
 
     speed_name = st.selectbox("选择速度", list(SPEED_OPTIONS.keys()))
-    slow = SPEED_OPTIONS[speed_name]
+    speed = SPEED_OPTIONS[speed_name]
 
     input_method = st.radio("选择输入方式", ("直接输入", "从TXT文件读取"))
 
@@ -173,24 +229,26 @@ def main():
 
     # ------------------- 直接输入 -------------------
     if input_method == "直接输入":
-        user_input = st.text_area("输入你的文本（每行生成一个音频文件）", height=200)
+        user_input = st.text_area("输入你的文本（每行生成一个音频文件，建议短句）", height=200)
         if st.button("生成音频"):
             if not user_input.strip():
                 st.error("请输入至少一行文字！")
             else:
                 lines = [l.strip() for l in user_input.split("\n") if l.strip()]
                 if lines:
+                    if len(lines) > 10:
+                        st.warning("长文本可能导致 API 失败，建议分批生成。")
                     progress_bar = st.progress(0)
                     status_text = st.empty()
-                    status_text.text("开始生成音频...")
+                    status_text.text("开始生成音频（带重试）...")
                     try:
-                        audio_files = generate_audios_batch(lines, lang, slow, progress_bar=progress_bar)
+                        audio_files = generate_audios_batch(lines, voice, speed, progress_bar=progress_bar)
                         text_lines = lines
                         zip_filename = "英语单词点读卡-设计制作：川哥.zip"
                         if audio_files:
                             st.success(f"成功生成 {len(audio_files)} 个音频文件！")
                         else:
-                            st.error("所有音频生成失败，请检查网络或文本内容。")
+                            st.error("所有音频生成失败。检查日志或尝试其他语音/本地运行。")
                     except Exception as e:
                         st.error(f"生成失败：{str(e)}")
                     progress_bar.empty()
@@ -213,17 +271,19 @@ def main():
                     else:
                         eng_lines = raw_lines[::2]
                         if eng_lines:
+                            if len(eng_lines) > 10:
+                                st.warning("长文本可能导致 API 失败，建议分批生成。")
                             progress_bar = st.progress(0)
                             status_text = st.empty()
-                            status_text.text("开始生成音频...")
+                            status_text.text("开始生成音频（带重试）...")
                             try:
-                                audio_files = generate_audios_batch(eng_lines, lang, slow, progress_bar=progress_bar)
+                                audio_files = generate_audios_batch(eng_lines, voice, speed, progress_bar=progress_bar)
                                 text_lines = raw_lines
                                 zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
                                 if audio_files:
                                     st.success(f"成功生成 {len(audio_files)} 个音频文件！")
                                 else:
-                                    st.error("所有音频生成失败，请检查网络或文本内容。")
+                                    st.error("所有音频生成失败。检查日志或尝试其他语音/本地运行。")
                             except Exception as e:
                                 st.error(f"生成失败：{str(e)}")
                             progress_bar.empty()
