@@ -5,6 +5,7 @@ import zipfile
 import asyncio
 import concurrent.futures
 from typing import List
+import time
 
 # -------------------------------------------------
 # 1. 清理函数（安全删除）
@@ -73,40 +74,66 @@ def get_txt_files() -> List[str]:
 # -------------------------------------------------
 # 4. 异步生成单条音频
 # -------------------------------------------------
-async def generate_one_audio(text: str, voice: str, speed: str, output_file: str) -> None:
+async def generate_one_audio(text: str, voice: str, speed: str, output_file: str) -> bool:
     if not text.strip():
-        raise ValueError("文本为空")
-    text = expand_abbreviations(text)
-    communicate = edge_tts.Communicate(text, voice, rate=speed, pitch="+0Hz")
-    await communicate.save(output_file)
+        return False
+    try:
+        text = expand_abbreviations(text)
+        communicate = edge_tts.Communicate(text, voice, rate=speed, pitch="+0Hz")
+        await communicate.save(output_file)
+        # 检查文件是否生成且非空
+        if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+            return True
+        else:
+            os.remove(output_file) if os.path.exists(output_file) else None
+            return False
+    except Exception as e:
+        st.error(f"生成音频失败（{output_file}）：{str(e)}")
+        return False
 
 # -------------------------------------------------
-# 5. 使用线程池执行异步任务（兼容 Streamlit）
+# 5. 同步生成音频（逐个生成，带进度条和超时）
 # -------------------------------------------------
 @st.cache_resource
-def _get_event_loop():
-    """创建一个独立的 asyncio 事件循环（单例）"""
+def get_executor():
+    return concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+def generate_audio_sync(text: str, voice: str, speed: str, output_file: str, timeout: int = 30) -> bool:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    return loop
+    try:
+        coro = generate_one_audio(text, voice, speed, output_file)
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        # 等待结果，带超时
+        result = future.result(timeout=timeout)
+        loop.close()
+        return result
+    except concurrent.futures.TimeoutError:
+        st.warning(f"生成 {output_file} 超时（{timeout}s）")
+        loop.stop()
+        loop.close()
+        if os.path.exists(output_file):
+            os.remove(output_file)
+        return False
+    except Exception as e:
+        st.error(f"生成 {output_file} 出错：{str(e)}")
+        loop.close()
+        return False
 
-def run_async_task(coro):
-    """在独立线程的事件循环中运行异步函数"""
-    loop = _get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        future = pool.submit(asyncio.run_coroutine_threadsafe, coro, loop)
-        return future.result().result()
-
-def generate_audios_batch(text_list: List[str], voice: str, speed: str, start_idx: int = 100):
-    async def _inner():
-        tasks = []
-        for idx, txt in enumerate(text_list, start=start_idx):
-            out_file = f"{idx}.mp3"
-            tasks.append(generate_one_audio(txt, voice, speed, out_file))
-        await asyncio.gather(*tasks, return_exceptions=False)
-        return [f"{i}.mp3" for i in range(start_idx, start_idx + len(text_list))]
-
-    return run_async_task(_inner())
+def generate_audios_batch(text_list: List[str], voice: str, speed: str, start_idx: int = 100, progress_bar=None) -> List[str]:
+    audio_files = []
+    executor = get_executor()
+    for i, text in enumerate(text_list):
+        out_file = f"{start_idx + i}.mp3"
+        if progress_bar:
+            progress_bar.progress((i + 1) / len(text_list))
+            st.rerun()  # 强制刷新以更新进度条
+        success = generate_audio_sync(text, voice, speed, out_file)
+        if success:
+            audio_files.append(out_file)
+        time.sleep(0.1)  # 避免过快请求
+    executor.shutdown(wait=False)
+    return audio_files
 
 # -------------------------------------------------
 # 6. HTML 生成
@@ -196,15 +223,23 @@ def main():
             if not user_input.strip():
                 st.error("请输入至少一行文字！")
             else:
-                with st.spinner("正在生成音频…"):
-                    lines = [l.strip() for l in user_input.split("\n") if l.strip()]
+                lines = [l.strip() for l in user_input.split("\n") if l.strip()]
+                if lines:
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    status_text.text("开始生成音频...")
                     try:
-                        audio_files = generate_audios_batch(lines, voice, speed)
+                        audio_files = generate_audios_batch(lines, voice, speed, progress_bar=progress_bar)
                         text_lines = lines
                         zip_filename = "英语单词点读卡-设计制作：川哥.zip"
-                        st.success("音频生成完成！")
+                        if audio_files:
+                            st.success(f"成功生成 {len(audio_files)} 个音频文件！")
+                        else:
+                            st.error("所有音频生成失败，请检查网络或语音设置。")
                     except Exception as e:
                         st.error(f"生成失败：{str(e)}")
+                    progress_bar.empty()
+                    status_text.empty()
 
     # ------------------- TXT 文件 -------------------
     else:
@@ -221,12 +256,23 @@ def main():
                     if len(raw_lines) % 2 != 0:
                         st.error("TXT 文件行数必须为偶数（每两行一组：英文+中文）")
                     else:
-                        with st.spinner("正在生成音频…"):
-                            eng_lines = raw_lines[::2]
-                            audio_files = generate_audios_batch(eng_lines, voice, speed)
-                            text_lines = raw_lines
-                            zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
-                        st.success("音频生成完成！")
+                        eng_lines = raw_lines[::2]
+                        if eng_lines:
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            status_text.text("开始生成音频...")
+                            try:
+                                audio_files = generate_audios_batch(eng_lines, voice, speed, progress_bar=progress_bar)
+                                text_lines = raw_lines
+                                zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
+                                if audio_files:
+                                    st.success(f"成功生成 {len(audio_files)} 个音频文件！")
+                                else:
+                                    st.error("所有音频生成失败，请检查网络或语音设置。")
+                            except Exception as e:
+                                st.error(f"生成失败：{str(e)}")
+                            progress_bar.empty()
+                            status_text.empty()
                 except Exception as e:
                     st.error(f"读取或生成失败：{str(e)}")
 
@@ -251,15 +297,16 @@ def main():
 
         # ------------------- 生成 HTML & ZIP -------------------
         try:
-            flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=(input_method != "直接输入"))
-            text_list_hthl = generate_text_list_html(text_lines, is_txt_input=(input_method != "直接输入"))
+            is_txt = (input_method != "直接输入")
+            flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=is_txt)
+            text_list_html = generate_text_list_html(text_lines, is_txt_input=is_txt)
 
             txt_list_file = "text_list.txt"
             with open(txt_list_file, "w", encoding="utf-8") as f:
                 f.write("\n".join(text_lines))
 
             with zipfile.ZipFile(zip_filename, "w") as z:
-                for f in [txt_list_file, flashcard_html, text_list_hthl] + audio_files:
+                for f in [txt_list_file, flashcard_html, text_list_html] + audio_files:
                     if os.path.isfile(f):
                         z.write(f)
 
