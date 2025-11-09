@@ -1,10 +1,9 @@
 import streamlit as st
 import edge_tts
 import os
-import shutil
 import zipfile
 import asyncio
-import threading
+import concurrent.futures
 from typing import List
 
 # -------------------------------------------------
@@ -72,48 +71,49 @@ def get_txt_files() -> List[str]:
     return [f for f in os.listdir() if f.endswith(".txt") and f != "requirements.txt"]
 
 # -------------------------------------------------
-# 4. 异步生成单条音频（核心）
+# 4. 异步生成单条音频
 # -------------------------------------------------
 async def generate_one_audio(text: str, voice: str, speed: str, output_file: str) -> None:
     if not text.strip():
-        raise ValueError("文本为空，无法生成音频")
+        raise ValueError("文本为空")
     text = expand_abbreviations(text)
-    # 加上 pitch 参数可避免部分语音返回空音频
     communicate = edge_tts.Communicate(text, voice, rate=speed, pitch="+0Hz")
     await communicate.save(output_file)
 
 # -------------------------------------------------
-# 5. 在后台线程里批量生成音频
+# 5. 使用线程池执行异步任务（兼容 Streamlit）
 # -------------------------------------------------
-@st.experimental_singleton
-def _event_loop():
+@st.cache_resource
+def _get_event_loop():
+    """创建一个独立的 asyncio 事件循环（单例）"""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     return loop
 
-def run_async_in_thread(coro):
-    """把 async 函数放到独立线程的事件循环里执行"""
-    loop = _event_loop()
-    future = asyncio.run_coroutine_threadsafe(coro, loop)
-    return future.result()   # 阻塞等待结果
+def run_async_task(coro):
+    """在独立线程的事件循环中运行异步函数"""
+    loop = _get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        future = pool.submit(asyncio.run_coroutine_threadsafe, coro, loop)
+        return future.result().result()
 
 def generate_audios_batch(text_list: List[str], voice: str, speed: str, start_idx: int = 100):
     async def _inner():
-        audio_files = []
+        tasks = []
         for idx, txt in enumerate(text_list, start=start_idx):
             out_file = f"{idx}.mp3"
-            await generate_one_audio(txt, voice, speed, out_file)
-            audio_files.append(out_file)
-        return audio_files
-    return run_async_in_thread(_inner())
+            tasks.append(generate_one_audio(txt, voice, speed, out_file))
+        await asyncio.gather(*tasks, return_exceptions=False)
+        return [f"{i}.mp3" for i in range(start_idx, start_idx + len(text_list))]
+
+    return run_async_task(_inner())
 
 # -------------------------------------------------
 # 6. HTML 生成
 # -------------------------------------------------
 def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
     html = """<!DOCTYPE html>
-<html lang="zh-CN">
-<head><meta charset="UTF-8"><title>点读卡</title>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>点读卡</title>
 <style>
 body{font-family:"Times New Roman",serif;background:#f0f0f0;margin:0;padding:20px}
 .card-container{max-width:800px;margin:auto}
@@ -125,20 +125,23 @@ h1{margin:0;font-size:2rem;color:#333}
 audio{display:none}
 .watermark{position:absolute;bottom:5px;right:15px;font-size:1rem;color:#888}
 </style></head><body><div class="card-container">"""
+
     if is_txt_input:
         for i, audio in enumerate(audio_files, start=100):
             eng = text_lines[(i - 100) * 2]
             chn = text_lines[(i - 100) * 2 + 1]
-            html += f"""<div class="card" onclick="document.getElementById('a{i}').play()">
-<h1>{eng}</h1><div class="chinese">{chn}</div>
-<audio id="a{i}" src="{os.path.basename(audio)}"></audio>
-<div class="watermark">设计制作: 川哥</div></div>"""
+            html += f'<div class="card" onclick="document.getElementById(\'a{i}\').play()">'
+            html += f"<h1>{eng}</h1><div class='chinese'>{chn}</div>"
+            html += f"<audio id='a{i}' src='{os.path.basename(audio)}'></audio>"
+            html += "<div class='watermark'>设计制作: 川哥</div></div>"
     else:
         for i, (audio, txt) in enumerate(zip(audio_files, text_lines), start=100):
-            html += f"""<div class="card" onclick="document.getElementById('a{i}').play()">
-<h1>{txt}</h1><audio id="a{i}" src="{os.path.basename(audio)}"></audio>
-<div class="watermark">设计制作: 川哥</div></div>"""
-    html += """</div></body></html>"""
+            html += f'<div class="card" onclick="document.getElementById(\'a{i}\').play()">'
+            html += f"<h1>{txt}</h1>"
+            html += f"<audio id='a{i}' src='{os.path.basename(audio)}'></audio>"
+            html += "<div class='watermark'>设计制作: 川哥</div></div>"
+
+    html += "</div></body></html>"
     path = "flashcard.html"
     with open(path, "w", encoding="utf-8") as f:
         f.write(html)
@@ -146,8 +149,7 @@ audio{display:none}
 
 def generate_text_list_html(text_lines, is_txt_input=False):
     html = """<!DOCTYPE html>
-<html lang="zh-CN">
-<head><meta charset="UTF-8"><title>文本列表</title>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>文本列表</title>
 <style>
 body{font-family:"Times New Roman",serif;background:#f0f0f0;margin:0;padding:20px}
 .list-container{max-width:800px;margin:auto}
@@ -155,13 +157,15 @@ h1{font-size:2rem;color:#333}
 .chinese{font-size:1.5rem;color:#555;margin-top:5px}
 hr{border:0;border-top:1px solid #ccc;margin:10px 0}
 </style></head><body><div class="list-container">"""
+
     if is_txt_input:
         for i in range(0, len(text_lines), 2):
-            html += f"<h1>{text_lines[i]}</h1><div class=\"chinese\">{text_lines[i+1]}</div><hr>"
+            html += f"<h1>{text_lines[i]}</h1><div class='chinese'>{text_lines[i+1]}</div><hr>"
     else:
         for t in text_lines:
             html += f"<h1>{t}</h1><hr>"
-    html += """</div></body></html>"""
+
+    html += "</div></body></html>"
     path = "text_list.html"
     with open(path, "w", encoding="utf-8") as f:
         f.write(html)
@@ -194,9 +198,13 @@ def main():
             else:
                 with st.spinner("正在生成音频…"):
                     lines = [l.strip() for l in user_input.split("\n") if l.strip()]
-                    audio_files = generate_audios_batch(lines, voice, speed)
-                    text_lines = lines
-                st.success("音频生成完成！")
+                    try:
+                        audio_files = generate_audios_batch(lines, voice, speed)
+                        text_lines = lines
+                        zip_filename = "英语单词点读卡-设计制作：川哥.zip"
+                        st.success("音频生成完成！")
+                    except Exception as e:
+                        st.error(f"生成失败：{str(e)}")
 
     # ------------------- TXT 文件 -------------------
     else:
@@ -206,18 +214,21 @@ def main():
         else:
             selected_file = st.selectbox("选择一个 TXT 文件", txt_files)
             if st.button("生成音频"):
-                with open(selected_file, "r", encoding="utf-8") as f:
-                    raw_lines = [l.strip() for l in f.readlines() if l.strip()]
+                try:
+                    with open(selected_file, "r", encoding="utf-8") as f:
+                        raw_lines = [l.strip() for l in f.readlines() if l.strip()]
 
-                if len(raw_lines) % 2 != 0:
-                    st.error("TXT 文件行数必须为偶数（每两行一组：英文+中文）")
-                else:
-                    with st.spinner("正在生成音频…"):
-                        eng_lines = raw_lines[::2]
-                        audio_files = generate_audios_batch(eng_lines, voice, speed)
-                        text_lines = raw_lines
-                        zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
-                    st.success("音频生成完成！")
+                    if len(raw_lines) % 2 != 0:
+                        st.error("TXT 文件行数必须为偶数（每两行一组：英文+中文）")
+                    else:
+                        with st.spinner("正在生成音频…"):
+                            eng_lines = raw_lines[::2]
+                            audio_files = generate_audios_batch(eng_lines, voice, speed)
+                            text_lines = raw_lines
+                            zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
+                        st.success("音频生成完成！")
+                except Exception as e:
+                    st.error(f"读取或生成失败：{str(e)}")
 
     # ------------------- 展示音频 -------------------
     if audio_files:
@@ -239,28 +250,31 @@ def main():
                 st.audio(audio)
 
         # ------------------- 生成 HTML & ZIP -------------------
-        flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=(input_method != "直接输入"))
-        text_list_html = generate_text_list_html(text_lines, is_txt_input=(input_method != "直接输入"))
+        try:
+            flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=(input_method != "直接输入"))
+            text_list_hthl = generate_text_list_html(text_lines, is_txt_input=(input_method != "直接输入"))
 
-        txt_list_file = "text_list.txt"
-        with open(txt_list_file, "w", encoding="utf-8") as f:
-            f.write("\n".join(text_lines))
+            txt_list_file = "text_list.txt"
+            with open(txt_list_file, "w", encoding="utf-8") as f:
+                f.write("\n".join(text_lines))
 
-        with zipfile.ZipFile(zip_filename, "w") as z:
-            for f in audio_files + [txt_list_file, flashcard_html, text_list_html]:
-                if os.path.isfile(f):
-                    z.write(f)
+            with zipfile.ZipFile(zip_filename, "w") as z:
+                for f in [txt_list_file, flashcard_html, text_list_hthl] + audio_files:
+                    if os.path.isfile(f):
+                        z.write(f)
 
-        with open(zip_filename, "rb") as f:
-            st.download_button(
-                label="下载所有文件（音频+列表+HTML）",
-                data=f,
-                file_name=zip_filename,
-                mime="application/zip",
-            )
+            with open(zip_filename, "rb") as f:
+                st.download_button(
+                    label="下载所有文件（音频+列表+HTML）",
+                    data=f,
+                    file_name=zip_filename,
+                    mime="application/zip",
+                )
+        except Exception as e:
+            st.error(f"打包失败：{e}")
 
         # ------------------- 清理 -------------------
-        clear_output_files(audio_files, txt_list_file, [flashcard_html, text_list_html])
+        clear_output_files(audio_files, "text_list.txt", ["flashcard.html", "text_list.html"])
 
 if __name__ == "__main__":
     main()
