@@ -320,8 +320,6 @@ def main():
                 mime="application/zip",
                 on_click=cleanup_after_download,
             )
-        except Exception as e:
-            st.error(f"打包失败：{e}")
 
 if __name__ == "__main__":
     main()
