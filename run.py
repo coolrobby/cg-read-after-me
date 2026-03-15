@@ -17,6 +17,23 @@ def clear_output_files(audio_files, text_file, html_files):
         except Exception:
             pass
 
+def cleanup_after_download():
+    """下载完成后的清理回调函数"""
+    audio_files = st.session_state.audio_files
+    zip_filename = st.session_state.zip_filename
+    
+    clear_output_files(audio_files, "text_list.txt", ["flashcard.html", "text_list.html"])
+    for f in [zip_filename] + audio_files:
+        try:
+            if os.path.isfile(f):
+                os.unlink(f)
+        except:
+            pass
+    
+    st.session_state.audio_files = []
+    st.session_state.text_lines = []
+    st.session_state.zip_data = None
+
 # -------------------------------------------------
 # 2. 常量（不变）
 # -------------------------------------------------
@@ -196,6 +213,8 @@ def main():
         st.session_state.text_lines = []
     if "zip_filename" not in st.session_state:
         st.session_state.zip_filename = "英语单词点读卡-设计制作：川哥.zip"
+    if "zip_data" not in st.session_state:
+        st.session_state.zip_data = None
 
     # ------------------- 直接输入 -------------------
     if input_method == "直接输入":
@@ -287,16 +306,22 @@ def main():
                         z.write(f)
 
             with open(zip_filename, "rb") as f:
-                st.download_button(
-                    label="下载所有文件（音频+列表+HTML）",
-                    data=f,
-                    file_name=zip_filename,
-                    mime="application/zip",
-                )
+                st.session_state.zip_data = f.read()
+
         except Exception as e:
             st.error(f"打包失败：{e}")
 
-        clear_output_files(audio_files, "text_list.txt", ["flashcard.html", "text_list.html"])
+        # 下载按钮使用回调清理
+        if st.session_state.zip_data:
+            st.download_button(
+                label="下载所有文件（音频+列表+HTML）",
+                data=st.session_state.zip_data,
+                file_name=zip_filename,
+                mime="application/zip",
+                on_click=cleanup_after_download,
+            )
+        except Exception as e:
+            st.error(f"打包失败：{e}")
 
 if __name__ == "__main__":
     main()
