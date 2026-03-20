@@ -8,6 +8,7 @@ from typing import List
 import time
 import io
 import base64
+import html
 import json
 from shutil import which
 from pydub import AudioSegment
@@ -403,13 +404,13 @@ def build_card_slider_html(cards, font_scale: float = 5.0):
         }
         .english {
             font-size: calc(1.9rem * var(--font-scale));
-            color: #153c62;
+            color: #000000;
             line-height: 1.12;
             word-break: break-word;
         }
         .chinese {
             font-size: calc(1.25rem * var(--font-scale));
-            color: #1f4d35;
+            color: #000000;
             line-height: 1.18;
             word-break: break-word;
         }
@@ -423,10 +424,10 @@ def build_card_slider_html(cards, font_scale: float = 5.0):
         .icon-btn {
             width: 56px;
             height: 56px;
-            border: 1px solid #d4deea;
+            border: 1px solid #000000;
             border-radius: 999px;
             background: #ffffff;
-            color: #2b5c89;
+            color: #000000;
             font-size: 26px;
             cursor: pointer;
             display: inline-flex;
@@ -597,13 +598,13 @@ def main():
         .preview-title {
             font-family: "Times New Roman", serif;
             font-size: 1.9rem;
-            color: #243b53;
+            color: #000000;
             margin: 0;
         }
         .preview-subtitle {
             font-family: "Times New Roman", serif;
             font-size: 1.2rem;
-            color: #486581;
+            color: #000000;
             margin-top: 4px;
         }
         .empty-box {
@@ -611,7 +612,7 @@ def main():
             border-radius: 14px;
             background: #f8fbff;
             padding: 22px;
-            color: #4d6480;
+            color: #000000;
         }
         </style>
         """,
@@ -640,6 +641,8 @@ def main():
         st.session_state.merged_repeat_gap_seconds = 1.0
     if "generated_input_method" not in st.session_state:
         st.session_state.generated_input_method = "直接输入"
+    if "display_mode" not in st.session_state:
+        st.session_state.display_mode = "列表模式"
 
     with st.sidebar:
         st.markdown("<div class='sidebar-title'>川哥文本转语音</div>", unsafe_allow_html=True)
@@ -664,6 +667,11 @@ def main():
                 selected_file = st.selectbox("选择一个 TXT 文件", txt_files)
 
         st.markdown("### 显示设置")
+        display_mode = st.radio(
+            "展示模式",
+            ("列表模式", "卡片模式"),
+            key="display_mode",
+        )
         font_scale = st.slider("字体倍数", min_value=1.0, max_value=8.0, value=5.0, step=0.5)
 
         st.markdown("### 合并设置")
@@ -788,19 +796,35 @@ def main():
                 }
             )
 
-    cards_payload = []
-    for item in display_items:
-        cards_payload.append(
-            {
-                "english": item["main_text"],
-                "chinese": item["sub_text"] or "",
-                "audio": audio_file_to_data_uri(item["audio"]),
-            }
-        )
+    if display_mode == "列表模式":
+        for item in display_items:
+            main_text_html = html.escape(item["main_text"])
+            sub_text_html = html.escape(item["sub_text"]) if item["sub_text"] else ""
+            subtitle_html = f"<div class='preview-subtitle'>{sub_text_html}</div>" if sub_text_html else ""
+            st.markdown(
+                f"""
+                <div class="preview-card">
+                    <h3 class="preview-title">{main_text_html}</h3>
+                    {subtitle_html}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.audio(item["audio"])
+    else:
+        cards_payload = []
+        for item in display_items:
+            cards_payload.append(
+                {
+                    "english": item["main_text"],
+                    "chinese": item["sub_text"] or "",
+                    "audio": audio_file_to_data_uri(item["audio"]),
+                }
+            )
 
-    card_component_html = build_card_slider_html(cards_payload, font_scale=font_scale)
-    component_height = max(460, int(130 + font_scale * 95))
-    components.html(card_component_html, height=component_height, scrolling=False)
+        card_component_html = build_card_slider_html(cards_payload, font_scale=font_scale)
+        component_height = max(460, int(130 + font_scale * 95))
+        components.html(card_component_html, height=component_height, scrolling=False)
 
 
     merge_signature = (tuple(audio_files), repeat_times, repeat_gap_seconds, gap_seconds)
