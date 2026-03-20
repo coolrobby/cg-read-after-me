@@ -8,7 +8,6 @@ from typing import List
 import time
 import io
 import base64
-import html
 import json
 from shutil import which
 from pydub import AudioSegment
@@ -44,6 +43,20 @@ def cleanup_after_download():
     st.session_state.merged_mp3_filename = "merged_audio.mp3"
     st.session_state.merged_mp3_signature = None
     st.session_state.generated_input_method = "直接输入"
+
+
+def show_temporary_notice(message: str, level: str = "info", seconds: float = 2.0):
+    placeholder = st.empty()
+    if level == "success":
+        placeholder.success(message)
+    elif level == "warning":
+        placeholder.warning(message)
+    elif level == "error":
+        placeholder.error(message)
+    else:
+        placeholder.info(message)
+    time.sleep(max(0.0, seconds))
+    placeholder.empty()
 
 # -------------------------------------------------
 # 2. 常量（不变）
@@ -352,7 +365,8 @@ def generate_audios_batch(text_list: List[str], voice: str, speed: str, start_id
 # -------------------------------------------------
 # 6. HTML 生成
 # -------------------------------------------------
-def build_card_slider_html(cards):
+def build_card_slider_html(cards, font_scale: float = 5.0):
+    safe_scale = max(1.0, min(float(font_scale), 10.0))
     cards_json = json.dumps(cards, ensure_ascii=False).replace("</", "<\\/")
     html_content = """
 <!DOCTYPE html>
@@ -362,6 +376,7 @@ def build_card_slider_html(cards):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>点读卡</title>
     <style>
+        :root { --font-scale: __FONT_SCALE__; }
         * { box-sizing: border-box; }
         body {
             margin: 0;
@@ -369,94 +384,85 @@ def build_card_slider_html(cards):
             font-family: "Times New Roman", serif;
             background: transparent;
         }
-        .slider {
+        .viewer {
             width: 100%;
             display: flex;
-            align-items: center;
             justify-content: center;
-            gap: 10px;
+            align-items: center;
         }
-        .nav-btn {
-            width: 44px;
-            height: 44px;
-            border: 1px solid #d6e0ea;
-            border-radius: 999px;
-            background: #fff;
-            color: #2f577a;
-            font-size: 24px;
-            cursor: pointer;
-        }
-        .nav-btn:disabled {
-            opacity: 0.45;
-            cursor: not-allowed;
-        }
-        .card {
-            width: min(760px, calc(100vw - 140px));
-            min-height: 240px;
-            border: 1px solid #d8e1eb;
-            border-radius: 14px;
-            background: #fff;
-            box-shadow: 0 6px 18px rgba(18, 53, 92, 0.08);
-            padding: 24px 20px;
+        .content {
+            width: min(1100px, calc(100vw - 36px));
+            min-height: 220px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 14px;
             text-align: center;
+            padding: 10px 8px;
         }
         .english {
-            font-size: clamp(2rem, 3.2vw, 2.9rem);
-            color: #173e66;
-            line-height: 1.2;
+            font-size: calc(1.9rem * var(--font-scale));
+            color: #153c62;
+            line-height: 1.12;
             word-break: break-word;
         }
         .chinese {
-            font-size: clamp(1.4rem, 2.3vw, 2rem);
-            color: #244f3a;
-            line-height: 1.3;
+            font-size: calc(1.25rem * var(--font-scale));
+            color: #1f4d35;
+            line-height: 1.18;
             word-break: break-word;
         }
-        .audio-btn {
-            border: none;
-            border-radius: 999px;
-            background: #1d73b7;
-            color: #fff;
-            font-size: 1rem;
-            font-weight: 700;
-            padding: 10px 18px;
-            cursor: pointer;
+        .controls {
+            margin-top: 8px;
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            align-items: center;
         }
-        .audio-btn:disabled {
-            opacity: 0.5;
+        .icon-btn {
+            width: 56px;
+            height: 56px;
+            border: 1px solid #d4deea;
+            border-radius: 999px;
+            background: #ffffff;
+            color: #2b5c89;
+            font-size: 26px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .icon-btn:disabled {
+            opacity: 0.45;
             cursor: not-allowed;
         }
         @media (max-width: 760px) {
-            body { padding: 6px 0; }
-            .slider { gap: 8px; }
-            .nav-btn {
-                width: 38px;
-                height: 38px;
-                font-size: 21px;
+            .content {
+                width: calc(100vw - 22px);
+                padding: 8px 4px;
             }
-            .card {
-                width: calc(100vw - 98px);
-                min-height: 214px;
-                padding: 18px 14px;
+            .controls { gap: 10px; }
+            .icon-btn {
+                width: 46px;
+                height: 46px;
+                font-size: 22px;
             }
         }
     </style>
 </head>
 <body>
-    <div class="slider">
-        <button class="nav-btn" id="prev-btn" type="button" aria-label="上一张">&#8592;</button>
-        <div class="card">
+    <div class="viewer">
+        <div class="content">
             <div class="english" id="english-text"></div>
             <div class="chinese" id="chinese-text"></div>
-            <button class="audio-btn" id="audio-btn" type="button">播放音频</button>
             <audio id="audio-player" preload="none"></audio>
+            <div class="controls">
+                <button class="icon-btn" id="prev-btn" type="button" aria-label="上一条">&#8592;</button>
+                <button class="icon-btn" id="play-btn" type="button" aria-label="播放音频">&#128266;</button>
+                <button class="icon-btn" id="next-btn" type="button" aria-label="下一条">&#8594;</button>
+            </div>
         </div>
-        <button class="nav-btn" id="next-btn" type="button" aria-label="下一张">&#8594;</button>
     </div>
     <script>
         const cards = __CARD_DATA__;
@@ -465,28 +471,28 @@ def build_card_slider_html(cards):
         const englishEl = document.getElementById("english-text");
         const chineseEl = document.getElementById("chinese-text");
         const audioEl = document.getElementById("audio-player");
-        const audioBtn = document.getElementById("audio-btn");
+        const playBtn = document.getElementById("play-btn");
         const prevBtn = document.getElementById("prev-btn");
         const nextBtn = document.getElementById("next-btn");
 
         function renderCard() {
             if (!cards.length) {
-                englishEl.textContent = "暂无卡片";
+                englishEl.textContent = "暂无内容";
                 chineseEl.textContent = "";
                 audioEl.src = "";
-                audioBtn.disabled = true;
+                playBtn.disabled = true;
                 prevBtn.disabled = true;
                 nextBtn.disabled = true;
                 return;
             }
             const current = cards[currentIndex];
             englishEl.textContent = current.english || "";
-            chineseEl.textContent = current.chinese || "（无中文）";
+            chineseEl.textContent = current.chinese || "";
             audioEl.src = current.audio || "";
-            audioBtn.disabled = !current.audio;
-            const disabled = cards.length <= 1;
-            prevBtn.disabled = disabled;
-            nextBtn.disabled = disabled;
+            playBtn.disabled = !current.audio;
+            const disableNav = cards.length <= 1;
+            prevBtn.disabled = disableNav;
+            nextBtn.disabled = disableNav;
         }
 
         function move(step) {
@@ -495,7 +501,7 @@ def build_card_slider_html(cards):
             renderCard();
         }
 
-        audioBtn.addEventListener("click", () => {
+        playBtn.addEventListener("click", () => {
             if (!audioEl.src) return;
             audioEl.currentTime = 0;
             audioEl.play();
@@ -509,10 +515,12 @@ def build_card_slider_html(cards):
 </body>
 </html>
 """
-    return html_content.replace("__CARD_DATA__", cards_json)
+    html_content = html_content.replace("__CARD_DATA__", cards_json)
+    html_content = html_content.replace("__FONT_SCALE__", f"{safe_scale:.2f}")
+    return html_content
 
 
-def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
+def generate_flashcard_html(audio_files, text_lines, is_txt_input=False, font_scale: float = 5.0):
     cards = []
     if is_txt_input:
         for i, audio in enumerate(audio_files, start=100):
@@ -533,7 +541,7 @@ def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
                 }
             )
 
-    html_content = build_card_slider_html(cards)
+    html_content = build_card_slider_html(cards, font_scale=font_scale)
     path = "flashcard.html"
     with open(path, "w", encoding="utf-8") as f:
         f.write(html_content)
@@ -632,8 +640,6 @@ def main():
         st.session_state.merged_repeat_gap_seconds = 1.0
     if "generated_input_method" not in st.session_state:
         st.session_state.generated_input_method = "直接输入"
-    if "display_mode" not in st.session_state:
-        st.session_state.display_mode = "列表模式"
 
     with st.sidebar:
         st.markdown("<div class='sidebar-title'>川哥文本转语音</div>", unsafe_allow_html=True)
@@ -658,11 +664,7 @@ def main():
                 selected_file = st.selectbox("选择一个 TXT 文件", txt_files)
 
         st.markdown("### 显示设置")
-        display_mode = st.radio(
-            "展示模式",
-            ("列表模式", "卡片模式"),
-            key="display_mode",
-        )
+        font_scale = st.slider("字体倍数", min_value=1.0, max_value=8.0, value=5.0, step=0.5)
 
         st.markdown("### 合并设置")
         repeat_times = int(
@@ -699,7 +701,7 @@ def main():
     speed = SPEED_OPTIONS[speed_name]
 
     if generate_audio:
-        st.write("🔄 开始处理...")
+        show_temporary_notice("开始处理...", level="info", seconds=2.0)
         if input_method == "直接输入":
             if not user_input.strip():
                 st.error("请输入至少一行文字！")
@@ -716,7 +718,7 @@ def main():
                             st.session_state.merged_mp3_data = None
                             st.session_state.merged_mp3_signature = None
                             if audio_files:
-                                st.success(f"✅ 成功生成 {len(audio_files)} 个音频！")
+                                show_temporary_notice(f"成功生成 {len(audio_files)} 个音频", level="success", seconds=2.0)
                             else:
                                 st.error("❌ 生成失败：检查 edge_tts API 或网络。")
                         except Exception as e:
@@ -742,7 +744,7 @@ def main():
                             st.session_state.merged_mp3_data = None
                             st.session_state.merged_mp3_signature = None
                             if audio_files:
-                                st.success(f"✅ 成功生成 {len(audio_files)} 个音频！")
+                                show_temporary_notice(f"成功生成 {len(audio_files)} 个音频", level="success", seconds=2.0)
                             else:
                                 st.error("❌ 生成失败：检查 edge_tts API 或网络。")
                 except Exception as e:
@@ -753,7 +755,6 @@ def main():
     zip_filename = st.session_state.zip_filename
     display_input_method = st.session_state.generated_input_method
 
-    st.markdown("### 显示区")
     if not audio_files:
         st.markdown(
             """
@@ -787,37 +788,19 @@ def main():
                 }
             )
 
-    if display_mode == "列表模式":
-        for item in display_items:
-            main_text_html = html.escape(item["main_text"])
-            sub_text_html = (
-                f"<div class='preview-subtitle'>{html.escape(item['sub_text'])}</div>"
-                if item["sub_text"]
-                else ""
-            )
-            st.markdown(
-                f"""
-                <div class="preview-card">
-                    <h3 class="preview-title">{main_text_html}</h3>
-                    {sub_text_html}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.audio(item["audio"])
-    else:
-        cards_payload = []
-        for item in display_items:
-            cards_payload.append(
-                {
-                    "english": item["main_text"],
-                    "chinese": item["sub_text"] or "",
-                    "audio": audio_file_to_data_uri(item["audio"]),
-                }
-            )
+    cards_payload = []
+    for item in display_items:
+        cards_payload.append(
+            {
+                "english": item["main_text"],
+                "chinese": item["sub_text"] or "",
+                "audio": audio_file_to_data_uri(item["audio"]),
+            }
+        )
 
-        card_component_html = build_card_slider_html(cards_payload)
-        components.html(card_component_html, height=320, scrolling=False)
+    card_component_html = build_card_slider_html(cards_payload, font_scale=font_scale)
+    component_height = max(460, int(130 + font_scale * 95))
+    components.html(card_component_html, height=component_height, scrolling=False)
 
 
     merge_signature = (tuple(audio_files), repeat_times, repeat_gap_seconds, gap_seconds)
@@ -844,7 +827,7 @@ def main():
 
     try:
         is_txt = (display_input_method != "直接输入")
-        flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=is_txt)
+        flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=is_txt, font_scale=font_scale)
         text_list_html = generate_text_list_html(text_lines, is_txt_input=is_txt)
 
         txt_list_file = "text_list.txt"
