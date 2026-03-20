@@ -37,7 +37,7 @@ def cleanup_after_download():
     st.session_state.zip_data = None
     st.session_state.merged_mp3_data = None
     st.session_state.merged_mp3_filename = "merged_audio.mp3"
-    st.session_state.merged_mp3_source_files = ()
+    st.session_state.merged_mp3_signature = None
 
 # -------------------------------------------------
 # 2. 常量（不变）
@@ -111,28 +111,46 @@ def _strip_leading_id3v2_tag(mp3_bytes: bytes) -> bytes:
         return b""
     return mp3_bytes[data_start:]
 
-def merge_audio_files_to_mp3(audio_files: List[str]) -> bytes:
+def merge_audio_files_to_mp3(audio_files: List[str], repeat_times: int = 3, gap_seconds: float = 2.0) -> bytes:
     if not audio_files:
         raise ValueError("没有可合并的音频文件。")
+    if repeat_times < 1:
+        raise ValueError("每行朗读次数必须大于等于 1。")
+    if gap_seconds < 0:
+        raise ValueError("行间间隔不能小于 0 秒。")
+
+    gap_ms = int(round(gap_seconds * 1000))
 
     # 优先使用 pydub 重新编码，保证兼容性。
     try:
         merged_audio = AudioSegment.empty()
-        for file_path in audio_files:
-            merged_audio += AudioSegment.from_file(file_path, format="mp3")
+        silence_segment = AudioSegment.silent(duration=gap_ms) if gap_ms > 0 else None
+
+        for i, file_path in enumerate(audio_files):
+            one_line_audio = AudioSegment.from_file(file_path, format="mp3")
+            for _ in range(repeat_times):
+                merged_audio += one_line_audio
+            if silence_segment is not None and i < len(audio_files) - 1:
+                merged_audio += silence_segment
+
         buffer = io.BytesIO()
         merged_audio.export(buffer, format="mp3")
         return buffer.getvalue()
     except Exception:
         # 回退到二进制拼接，避免 ffmpeg 不可用时完全失败。
+        if gap_ms > 0:
+            raise ValueError("当前环境无法插入行间间隔（可能缺少 ffmpeg），请安装 ffmpeg 后重试，或把间隔设为 0 秒。")
+
         merged_bytes = bytearray()
-        for index, file_path in enumerate(audio_files):
+        for file_index, file_path in enumerate(audio_files):
             with open(file_path, "rb") as f:
                 chunk = f.read()
             chunk = _strip_id3v1_tag(chunk)
-            if index > 0:
-                chunk = _strip_leading_id3v2_tag(chunk)
-            merged_bytes.extend(chunk)
+            for repeat_index in range(repeat_times):
+                chunk_to_append = chunk
+                if file_index > 0 or repeat_index > 0:
+                    chunk_to_append = _strip_leading_id3v2_tag(chunk_to_append)
+                merged_bytes.extend(chunk_to_append)
         if not merged_bytes:
             raise ValueError("合并失败：无法读取任何音频数据。")
         return bytes(merged_bytes)
@@ -269,8 +287,12 @@ def main():
         st.session_state.merged_mp3_data = None
     if "merged_mp3_filename" not in st.session_state:
         st.session_state.merged_mp3_filename = "merged_audio.mp3"
-    if "merged_mp3_source_files" not in st.session_state:
-        st.session_state.merged_mp3_source_files = ()
+    if "merged_mp3_signature" not in st.session_state:
+        st.session_state.merged_mp3_signature = None
+    if "merged_repeat_times" not in st.session_state:
+        st.session_state.merged_repeat_times = 3
+    if "merged_gap_seconds" not in st.session_state:
+        st.session_state.merged_gap_seconds = 2.0
 
     # ------------------- 直接输入 -------------------
     if input_method == "直接输入":
@@ -290,7 +312,7 @@ def main():
                             st.session_state.text_lines = lines
                             st.session_state.zip_filename = "英语单词点读卡-设计制作：川哥.zip"
                             st.session_state.merged_mp3_data = None
-                            st.session_state.merged_mp3_source_files = ()
+                            st.session_state.merged_mp3_signature = None
                             if audio_files:
                                 st.success(f"✅ 成功生成 {len(audio_files)} 个音频！")
                             else:
@@ -320,7 +342,7 @@ def main():
                             st.session_state.text_lines = raw_lines
                             st.session_state.zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
                             st.session_state.merged_mp3_data = None
-                            st.session_state.merged_mp3_source_files = ()
+                            st.session_state.merged_mp3_signature = None
                             if audio_files:
                                 st.success(f"✅ 成功生成 {len(audio_files)} 个音频！")
                             else:
@@ -351,15 +373,43 @@ def main():
                 )
                 st.audio(audio)
 
-        audio_signature = tuple(audio_files)
+        st.markdown("### 合并 MP3 选项")
+        option_col1, option_col2 = st.columns(2)
+        repeat_times = int(
+            option_col1.number_input(
+                "每行朗读次数",
+                min_value=1,
+                max_value=10,
+                step=1,
+                key="merged_repeat_times",
+            )
+        )
+        gap_seconds = float(
+            option_col2.number_input(
+                "行间间隔（秒）",
+                min_value=0.0,
+                max_value=10.0,
+                step=0.5,
+                key="merged_gap_seconds",
+            )
+        )
+
+        merge_signature = (tuple(audio_files), repeat_times, gap_seconds)
         if (
             st.session_state.merged_mp3_data is None
-            or st.session_state.merged_mp3_source_files != audio_signature
+            or st.session_state.merged_mp3_signature != merge_signature
         ):
             try:
-                st.session_state.merged_mp3_data = merge_audio_files_to_mp3(audio_files)
-                st.session_state.merged_mp3_source_files = audio_signature
-                st.session_state.merged_mp3_filename = f"{os.path.splitext(zip_filename)[0]}.mp3"
+                st.session_state.merged_mp3_data = merge_audio_files_to_mp3(
+                    audio_files,
+                    repeat_times=repeat_times,
+                    gap_seconds=gap_seconds,
+                )
+                st.session_state.merged_mp3_signature = merge_signature
+                gap_label = str(gap_seconds).replace(".", "p")
+                st.session_state.merged_mp3_filename = (
+                    f"{os.path.splitext(zip_filename)[0]}-x{repeat_times}-gap{gap_label}s.mp3"
+                )
             except Exception as e:
                 st.session_state.merged_mp3_data = None
                 st.error(f"合并 MP3 失败：{e}")
