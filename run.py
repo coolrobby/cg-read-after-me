@@ -5,6 +5,8 @@ import zipfile
 import asyncio
 from typing import List
 import time
+import io
+from pydub import AudioSegment
 
 # -------------------------------------------------
 # 1. 清理函数
@@ -33,6 +35,9 @@ def cleanup_after_download():
     st.session_state.audio_files = []
     st.session_state.text_lines = []
     st.session_state.zip_data = None
+    st.session_state.merged_mp3_data = None
+    st.session_state.merged_mp3_filename = "merged_audio.mp3"
+    st.session_state.merged_mp3_source_files = ()
 
 # -------------------------------------------------
 # 2. 常量（不变）
@@ -86,6 +91,51 @@ def expand_abbreviations(text: str) -> str:
 
 def get_txt_files() -> List[str]:
     return [f for f in os.listdir() if f.endswith(".txt") and f != "requirements.txt"]
+
+def _strip_id3v1_tag(mp3_bytes: bytes) -> bytes:
+    if len(mp3_bytes) >= 128 and mp3_bytes[-128:-125] == b"TAG":
+        return mp3_bytes[:-128]
+    return mp3_bytes
+
+def _strip_leading_id3v2_tag(mp3_bytes: bytes) -> bytes:
+    if len(mp3_bytes) < 10 or mp3_bytes[:3] != b"ID3":
+        return mp3_bytes
+    tag_size = (
+        ((mp3_bytes[6] & 0x7F) << 21)
+        | ((mp3_bytes[7] & 0x7F) << 14)
+        | ((mp3_bytes[8] & 0x7F) << 7)
+        | (mp3_bytes[9] & 0x7F)
+    )
+    data_start = 10 + tag_size
+    if data_start >= len(mp3_bytes):
+        return b""
+    return mp3_bytes[data_start:]
+
+def merge_audio_files_to_mp3(audio_files: List[str]) -> bytes:
+    if not audio_files:
+        raise ValueError("没有可合并的音频文件。")
+
+    # 优先使用 pydub 重新编码，保证兼容性。
+    try:
+        merged_audio = AudioSegment.empty()
+        for file_path in audio_files:
+            merged_audio += AudioSegment.from_file(file_path, format="mp3")
+        buffer = io.BytesIO()
+        merged_audio.export(buffer, format="mp3")
+        return buffer.getvalue()
+    except Exception:
+        # 回退到二进制拼接，避免 ffmpeg 不可用时完全失败。
+        merged_bytes = bytearray()
+        for index, file_path in enumerate(audio_files):
+            with open(file_path, "rb") as f:
+                chunk = f.read()
+            chunk = _strip_id3v1_tag(chunk)
+            if index > 0:
+                chunk = _strip_leading_id3v2_tag(chunk)
+            merged_bytes.extend(chunk)
+        if not merged_bytes:
+            raise ValueError("合并失败：无法读取任何音频数据。")
+        return bytes(merged_bytes)
 
 # -------------------------------------------------
 # 4. 异步生成单条音频（带重试）
@@ -215,6 +265,12 @@ def main():
         st.session_state.zip_filename = "英语单词点读卡-设计制作：川哥.zip"
     if "zip_data" not in st.session_state:
         st.session_state.zip_data = None
+    if "merged_mp3_data" not in st.session_state:
+        st.session_state.merged_mp3_data = None
+    if "merged_mp3_filename" not in st.session_state:
+        st.session_state.merged_mp3_filename = "merged_audio.mp3"
+    if "merged_mp3_source_files" not in st.session_state:
+        st.session_state.merged_mp3_source_files = ()
 
     # ------------------- 直接输入 -------------------
     if input_method == "直接输入":
@@ -233,6 +289,8 @@ def main():
                             st.session_state.audio_files = audio_files
                             st.session_state.text_lines = lines
                             st.session_state.zip_filename = "英语单词点读卡-设计制作：川哥.zip"
+                            st.session_state.merged_mp3_data = None
+                            st.session_state.merged_mp3_source_files = ()
                             if audio_files:
                                 st.success(f"✅ 成功生成 {len(audio_files)} 个音频！")
                             else:
@@ -261,6 +319,8 @@ def main():
                             st.session_state.audio_files = audio_files
                             st.session_state.text_lines = raw_lines
                             st.session_state.zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
+                            st.session_state.merged_mp3_data = None
+                            st.session_state.merged_mp3_source_files = ()
                             if audio_files:
                                 st.success(f"✅ 成功生成 {len(audio_files)} 个音频！")
                             else:
@@ -291,6 +351,19 @@ def main():
                 )
                 st.audio(audio)
 
+        audio_signature = tuple(audio_files)
+        if (
+            st.session_state.merged_mp3_data is None
+            or st.session_state.merged_mp3_source_files != audio_signature
+        ):
+            try:
+                st.session_state.merged_mp3_data = merge_audio_files_to_mp3(audio_files)
+                st.session_state.merged_mp3_source_files = audio_signature
+                st.session_state.merged_mp3_filename = f"{os.path.splitext(zip_filename)[0]}.mp3"
+            except Exception as e:
+                st.session_state.merged_mp3_data = None
+                st.error(f"合并 MP3 失败：{e}")
+
         try:
             is_txt = (input_method != "直接输入")
             flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=is_txt)
@@ -312,6 +385,14 @@ def main():
             st.error(f"打包失败：{e}")
 
         # 下载按钮使用回调清理
+        if st.session_state.merged_mp3_data:
+            st.download_button(
+                label="生成MP3",
+                data=st.session_state.merged_mp3_data,
+                file_name=st.session_state.merged_mp3_filename,
+                mime="audio/mpeg",
+            )
+
         if st.session_state.zip_data:
             st.download_button(
                 label="下载所有文件（音频+列表+HTML）",
