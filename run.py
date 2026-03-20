@@ -39,6 +39,7 @@ def cleanup_after_download():
     st.session_state.merged_mp3_data = None
     st.session_state.merged_mp3_filename = "merged_audio.mp3"
     st.session_state.merged_mp3_signature = None
+    st.session_state.generated_input_method = "直接输入"
 
 # -------------------------------------------------
 # 2. 常量（不变）
@@ -406,17 +407,61 @@ hr{border:0;border-top:1px solid #ccc;margin:10px 0}
 # 7. 主函数
 # -------------------------------------------------
 def main():
-    st.title("英语点读卡生成器（Edge TTS）")
+    st.set_page_config(page_title="川哥文本转语音", layout="wide", initial_sidebar_state="expanded")
+    st.markdown(
+        """
+        <style>
+        .main .block-container {max-width: 1200px; padding-top: 1.2rem; padding-bottom: 2.5rem;}
+        [data-testid="stSidebar"] {background: linear-gradient(180deg, #f5f8ff 0%, #f4fbf8 100%);}
+        .hero-box {
+            border: 1px solid #dbe5f6;
+            border-radius: 18px;
+            padding: 18px 20px;
+            background: linear-gradient(135deg, #f7fbff 0%, #f2f8ff 45%, #f5fff8 100%);
+            margin-bottom: 14px;
+        }
+        .hero-title {font-size: 2rem; font-weight: 800; color: #1a365d; margin: 0;}
+        .hero-subtitle {font-size: 0.98rem; color: #395575; margin-top: 6px;}
+        .preview-card {
+            border: 1px solid #dfe8ef;
+            border-radius: 14px;
+            background: #fbfdff;
+            padding: 12px 14px 10px 14px;
+            margin: 12px 0 8px 0;
+        }
+        .preview-title {
+            font-family: "Times New Roman", serif;
+            font-size: 1.9rem;
+            color: #243b53;
+            margin: 0;
+        }
+        .preview-subtitle {
+            font-family: "Times New Roman", serif;
+            font-size: 1.2rem;
+            color: #486581;
+            margin-top: 4px;
+        }
+        .empty-box {
+            border: 1px dashed #c7d7eb;
+            border-radius: 14px;
+            background: #f8fbff;
+            padding: 22px;
+            color: #4d6480;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    st.info("⚠️ 测试提示：用 Chrome 测试按钮；短文本（如 'Hello'）优先。日志：Manage app > Logs。")
-
-    voice_name = st.selectbox("选择音色", list(VOICES.keys()))
-    voice = VOICES[voice_name]
-
-    speed_name = st.selectbox("选择速度", list(SPEED_OPTIONS.keys()))
-    speed = SPEED_OPTIONS[speed_name]
-
-    input_method = st.radio("选择输入方式", ("直接输入", "从TXT文件读取"))
+    st.markdown(
+        """
+        <div class="hero-box">
+            <h1 class="hero-title">川哥文本转语音</h1>
+            <div class="hero-subtitle">左侧功能区负责设置与输入，右侧显示区查看音频预览并下载结果。</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if "audio_files" not in st.session_state:
         st.session_state.audio_files = []
@@ -438,24 +483,79 @@ def main():
         st.session_state.merged_gap_seconds = 2.0
     if "merged_repeat_gap_seconds" not in st.session_state:
         st.session_state.merged_repeat_gap_seconds = 1.0
+    if "generated_input_method" not in st.session_state:
+        st.session_state.generated_input_method = "直接输入"
 
-    # ------------------- 直接输入 -------------------
-    if input_method == "直接输入":
-        user_input = st.text_area("输入你的文本（每行生成一个音频文件）", height=200)
-        if st.button("生成音频"):
-            st.write("🔄 开始处理...（检查日志）")  # 立即反馈
+    with st.sidebar:
+        st.markdown("## 功能区")
+        voice_name = st.selectbox("选择音色", list(VOICES.keys()))
+        speed_name = st.selectbox("选择速度", list(SPEED_OPTIONS.keys()))
+        input_method = st.radio("选择输入方式", ("直接输入", "从TXT文件读取"))
+
+        user_input = ""
+        selected_file = None
+        disable_generate = False
+
+        st.markdown("### 输入区")
+        if input_method == "直接输入":
+            user_input = st.text_area("文本内容（每行生成一个音频）", height=220, placeholder="例如：\nhello\nthank you")
+        else:
+            txt_files = get_txt_files()
+            if not txt_files:
+                st.warning("当前目录下没有找到 TXT 文件。")
+                disable_generate = True
+            else:
+                selected_file = st.selectbox("选择一个 TXT 文件", txt_files)
+
+        st.markdown("### 合并设置")
+        repeat_times = int(
+            st.number_input(
+                "每行朗读次数",
+                min_value=1,
+                max_value=10,
+                step=1,
+                key="merged_repeat_times",
+            )
+        )
+        repeat_gap_seconds = float(
+            st.number_input(
+                "重复间隔（秒）",
+                min_value=0.0,
+                max_value=10.0,
+                step=0.5,
+                key="merged_repeat_gap_seconds",
+            )
+        )
+        gap_seconds = float(
+            st.number_input(
+                "行间间隔（秒）",
+                min_value=0.0,
+                max_value=10.0,
+                step=0.5,
+                key="merged_gap_seconds",
+            )
+        )
+
+        generate_audio = st.button("生成音频", type="primary", use_container_width=True, disabled=disable_generate)
+
+    voice = VOICES[voice_name]
+    speed = SPEED_OPTIONS[speed_name]
+
+    if generate_audio:
+        st.write("🔄 开始处理...")
+        if input_method == "直接输入":
             if not user_input.strip():
                 st.error("请输入至少一行文字！")
             else:
                 lines = [l.strip() for l in user_input.split("\n") if l.strip()]
                 if lines:
-                    st.write(f"处理 {len(lines)} 行文本...")
-                    with st.spinner("生成音频中...（可能需 10-30s）"):
+                    with st.spinner(f"生成音频中（共 {len(lines)} 行）..."):
                         try:
                             audio_files = generate_audios_batch(lines, voice, speed)
                             st.session_state.audio_files = audio_files
                             st.session_state.text_lines = lines
                             st.session_state.zip_filename = "英语单词点读卡-设计制作：川哥.zip"
+                            st.session_state.generated_input_method = "直接输入"
                             st.session_state.merged_mp3_data = None
                             st.session_state.merged_mp3_signature = None
                             if audio_files:
@@ -464,14 +564,10 @@ def main():
                                 st.error("❌ 生成失败：检查 edge_tts API 或网络。")
                         except Exception as e:
                             st.error(f"❌ 异常：{str(e)}")
-    else:
-        txt_files = get_txt_files()
-        if not txt_files:
-            st.warning("当前目录下没有找到 TXT 文件！")
         else:
-            selected_file = st.selectbox("选择一个 TXT 文件", txt_files)
-            if st.button("生成音频"):
-                st.write("🔄 开始处理...（检查日志）")  # 立即反馈
+            if not selected_file:
+                st.error("请先选择 TXT 文件。")
+            else:
                 try:
                     with open(selected_file, "r", encoding="utf-8") as f:
                         raw_lines = [l.strip() for l in f.readlines() if l.strip()]
@@ -480,12 +576,12 @@ def main():
                         st.error("TXT 文件行数必须为偶数（每两行一组：英文+中文）")
                     else:
                         eng_lines = raw_lines[::2]
-                        st.write(f"处理 {len(eng_lines)} 行英文...")
-                        with st.spinner("生成音频中...（可能需 10-30s）"):
+                        with st.spinner(f"生成音频中（共 {len(eng_lines)} 行英文）..."):
                             audio_files = generate_audios_batch(eng_lines, voice, speed)
                             st.session_state.audio_files = audio_files
                             st.session_state.text_lines = raw_lines
                             st.session_state.zip_filename = f"{os.path.splitext(selected_file)[0]}.zip"
+                            st.session_state.generated_input_method = "从TXT文件读取"
                             st.session_state.merged_mp3_data = None
                             st.session_state.merged_mp3_signature = None
                             if audio_files:
@@ -495,118 +591,111 @@ def main():
                 except Exception as e:
                     st.error(f"❌ 读取/生成失败：{str(e)}")
 
-    # ------------------- 展示 & 下载 -------------------
     audio_files = st.session_state.audio_files
     text_lines = st.session_state.text_lines
     zip_filename = st.session_state.zip_filename
+    display_input_method = st.session_state.generated_input_method
 
-    if audio_files:
-        st.subheader("生成的音频文件")
-        if input_method == "直接输入":
-            for i, audio in enumerate(audio_files, start=100):
-                txt = text_lines[i - 100]
-                st.markdown(f"<h1 style='font-family:\"Times New Roman\",serif;'>{txt}</h1>", unsafe_allow_html=True)
-                st.audio(audio)
-        else:
-            for i, audio in enumerate(audio_files, start=100):
-                eng = text_lines[(i - 100) * 2]
-                chn = text_lines[(i - 100) * 2 + 1]
-                st.markdown(
-                    f"<h1 style='font-family:\"Times New Roman\",serif;'>{eng}</h1>"
-                    f"<div style='font-family:\"Times New Roman\",serif;font-size:1.5rem;color:#555;margin-top:5px;'>{chn}</div>",
-                    unsafe_allow_html=True,
-                )
-                st.audio(audio)
-
-        st.markdown("### 合并 MP3 选项")
-        option_col1, option_col2, option_col3 = st.columns(3)
-        repeat_times = int(
-            option_col1.number_input(
-                "每行朗读次数",
-                min_value=1,
-                max_value=10,
-                step=1,
-                key="merged_repeat_times",
-            )
+    st.markdown("### 显示区")
+    if not audio_files:
+        st.markdown(
+            """
+            <div class="empty-box">
+                还没有生成音频。请在左侧功能区完成设置并点击“生成音频”。
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        repeat_gap_seconds = float(
-            option_col2.number_input(
-                "重复间隔（秒）",
-                min_value=0.0,
-                max_value=10.0,
-                step=0.5,
-                key="merged_repeat_gap_seconds",
-            )
-        )
-        gap_seconds = float(
-            option_col3.number_input(
-                "行间间隔（秒）",
-                min_value=0.0,
-                max_value=10.0,
-                step=0.5,
-                key="merged_gap_seconds",
-            )
-        )
+        return
 
-        merge_signature = (tuple(audio_files), repeat_times, repeat_gap_seconds, gap_seconds)
-        if (
-            st.session_state.merged_mp3_data is None
-            or st.session_state.merged_mp3_signature != merge_signature
-        ):
-            try:
-                st.session_state.merged_mp3_data = merge_audio_files_to_mp3(
-                    audio_files,
-                    repeat_times=repeat_times,
-                    gap_seconds=gap_seconds,
-                    repeat_gap_seconds=repeat_gap_seconds,
-                )
-                st.session_state.merged_mp3_signature = merge_signature
-                repeat_gap_label = str(repeat_gap_seconds).replace(".", "p")
-                gap_label = str(gap_seconds).replace(".", "p")
-                st.session_state.merged_mp3_filename = (
-                    f"{os.path.splitext(zip_filename)[0]}-x{repeat_times}-rgap{repeat_gap_label}s-gap{gap_label}s.mp3"
-                )
-            except Exception as e:
-                st.session_state.merged_mp3_data = None
-                st.error(f"合并 MP3 失败：{e}")
+    if display_input_method == "直接输入":
+        for i, audio in enumerate(audio_files, start=100):
+            txt = text_lines[i - 100]
+            st.markdown(
+                f"""
+                <div class="preview-card">
+                    <h3 class="preview-title">{txt}</h3>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.audio(audio)
+    else:
+        for i, audio in enumerate(audio_files, start=100):
+            eng = text_lines[(i - 100) * 2]
+            chn = text_lines[(i - 100) * 2 + 1]
+            st.markdown(
+                f"""
+                <div class="preview-card">
+                    <h3 class="preview-title">{eng}</h3>
+                    <div class="preview-subtitle">{chn}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.audio(audio)
 
+    merge_signature = (tuple(audio_files), repeat_times, repeat_gap_seconds, gap_seconds)
+    if (
+        st.session_state.merged_mp3_data is None
+        or st.session_state.merged_mp3_signature != merge_signature
+    ):
         try:
-            is_txt = (input_method != "直接输入")
-            flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=is_txt)
-            text_list_html = generate_text_list_html(text_lines, is_txt_input=is_txt)
-
-            txt_list_file = "text_list.txt"
-            with open(txt_list_file, "w", encoding="utf-8") as f:
-                f.write("\n".join(text_lines))
-
-            with zipfile.ZipFile(zip_filename, "w") as z:
-                for f in [txt_list_file, flashcard_html, text_list_html] + audio_files:
-                    if os.path.isfile(f):
-                        z.write(f)
-
-            with open(zip_filename, "rb") as f:
-                st.session_state.zip_data = f.read()
-
+            st.session_state.merged_mp3_data = merge_audio_files_to_mp3(
+                audio_files,
+                repeat_times=repeat_times,
+                gap_seconds=gap_seconds,
+                repeat_gap_seconds=repeat_gap_seconds,
+            )
+            st.session_state.merged_mp3_signature = merge_signature
+            repeat_gap_label = str(repeat_gap_seconds).replace(".", "p")
+            gap_label = str(gap_seconds).replace(".", "p")
+            st.session_state.merged_mp3_filename = (
+                f"{os.path.splitext(zip_filename)[0]}-x{repeat_times}-rgap{repeat_gap_label}s-gap{gap_label}s.mp3"
+            )
         except Exception as e:
-            st.error(f"打包失败：{e}")
+            st.session_state.merged_mp3_data = None
+            st.error(f"合并 MP3 失败：{e}")
 
-        # 下载按钮使用回调清理
-        if st.session_state.merged_mp3_data:
-            st.download_button(
-                label="生成MP3",
-                data=st.session_state.merged_mp3_data,
-                file_name=st.session_state.merged_mp3_filename,
-                mime="audio/mpeg",
-            )
+    try:
+        is_txt = (display_input_method != "直接输入")
+        flashcard_html = generate_flashcard_html(audio_files, text_lines, is_txt_input=is_txt)
+        text_list_html = generate_text_list_html(text_lines, is_txt_input=is_txt)
 
-        if st.session_state.zip_data:
-            st.download_button(
-                label="下载所有文件（音频+列表+HTML）",
-                data=st.session_state.zip_data,
-                file_name=zip_filename,
-                mime="application/zip",
-                on_click=cleanup_after_download,
-            )
+        txt_list_file = "text_list.txt"
+        with open(txt_list_file, "w", encoding="utf-8") as f:
+            f.write("\n".join(text_lines))
+
+        with zipfile.ZipFile(zip_filename, "w") as z:
+            for f in [txt_list_file, flashcard_html, text_list_html] + audio_files:
+                if os.path.isfile(f):
+                    z.write(f)
+
+        with open(zip_filename, "rb") as f:
+            st.session_state.zip_data = f.read()
+
+    except Exception as e:
+        st.error(f"打包失败：{e}")
+
+    download_col1, download_col2 = st.columns(2)
+    if st.session_state.merged_mp3_data:
+        download_col1.download_button(
+            label="生成MP3",
+            data=st.session_state.merged_mp3_data,
+            file_name=st.session_state.merged_mp3_filename,
+            mime="audio/mpeg",
+            use_container_width=True,
+        )
+
+    if st.session_state.zip_data:
+        download_col2.download_button(
+            label="下载所有文件（音频+列表+HTML）",
+            data=st.session_state.zip_data,
+            file_name=zip_filename,
+            mime="application/zip",
+            on_click=cleanup_after_download,
+            use_container_width=True,
+        )
 
 if __name__ == "__main__":
     main()
