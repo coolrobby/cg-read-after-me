@@ -6,6 +6,8 @@ import asyncio
 from typing import List
 import time
 import io
+import base64
+import html
 from shutil import which
 from pydub import AudioSegment
 
@@ -231,6 +233,11 @@ def build_silence_mp3_segment(gap_seconds: float) -> bytes:
     _SILENCE_SEGMENT_CACHE[cache_key] = segment
     return segment
 
+def audio_file_to_data_uri(audio_path: str) -> str:
+    with open(audio_path, "rb") as f:
+        audio_b64 = base64.b64encode(f.read()).decode("ascii")
+    return f"data:audio/mpeg;base64,{audio_b64}"
+
 def merge_audio_files_to_mp3(
     audio_files: List[str],
     repeat_times: int = 3,
@@ -411,17 +418,14 @@ def main():
     st.markdown(
         """
         <style>
-        .main .block-container {max-width: 1200px; padding-top: 1.2rem; padding-bottom: 2.5rem;}
+        .main .block-container {max-width: 1200px; padding-top: 1rem; padding-bottom: 2.5rem;}
         [data-testid="stSidebar"] {background: linear-gradient(180deg, #f5f8ff 0%, #f4fbf8 100%);}
-        .hero-box {
-            border: 1px solid #dbe5f6;
-            border-radius: 18px;
-            padding: 18px 20px;
-            background: linear-gradient(135deg, #f7fbff 0%, #f2f8ff 45%, #f5fff8 100%);
-            margin-bottom: 14px;
+        .sidebar-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #1a365d;
+            margin: 0 0 10px 0;
         }
-        .hero-title {font-size: 2rem; font-weight: 800; color: #1a365d; margin: 0;}
-        .hero-subtitle {font-size: 0.98rem; color: #395575; margin-top: 6px;}
         .preview-card {
             border: 1px solid #dfe8ef;
             border-radius: 14px;
@@ -448,17 +452,43 @@ def main():
             padding: 22px;
             color: #4d6480;
         }
+        .word-card {
+            border: 1px solid #dbe4f2;
+            border-radius: 16px;
+            background: linear-gradient(145deg, #ffffff 0%, #f7fbff 100%);
+            padding: 14px;
+            min-height: 142px;
+            position: relative;
+            box-shadow: 0 4px 10px rgba(29, 78, 137, 0.07);
+            margin-bottom: 12px;
+        }
+        .word-main {
+            font-family: "Times New Roman", serif;
+            font-size: 1.55rem;
+            color: #1f3c5a;
+            line-height: 1.25;
+            margin: 0 0 6px 0;
+            word-break: break-word;
+        }
+        .word-sub {
+            font-family: "Times New Roman", serif;
+            font-size: 1.05rem;
+            color: #4b647d;
+            line-height: 1.35;
+            margin: 0 0 38px 0;
+            word-break: break-word;
+        }
+        .audio-icon {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            width: 46px;
+            height: 34px;
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow: 0 4px 10px rgba(47, 128, 195, 0.18);
+        }
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        """
-        <div class="hero-box">
-            <h1 class="hero-title">川哥文本转语音</h1>
-            <div class="hero-subtitle">左侧功能区负责设置与输入，右侧显示区查看音频预览并下载结果。</div>
-        </div>
         """,
         unsafe_allow_html=True,
     )
@@ -485,9 +515,12 @@ def main():
         st.session_state.merged_repeat_gap_seconds = 1.0
     if "generated_input_method" not in st.session_state:
         st.session_state.generated_input_method = "直接输入"
+    if "display_mode" not in st.session_state:
+        st.session_state.display_mode = "列表模式"
 
     with st.sidebar:
-        st.markdown("## 功能区")
+        st.markdown("<div class='sidebar-title'>川哥文本转语音</div>", unsafe_allow_html=True)
+        st.markdown("### 功能区")
         voice_name = st.selectbox("选择音色", list(VOICES.keys()))
         speed_name = st.selectbox("选择速度", list(SPEED_OPTIONS.keys()))
         input_method = st.radio("选择输入方式", ("直接输入", "从TXT文件读取"))
@@ -506,6 +539,13 @@ def main():
                 disable_generate = True
             else:
                 selected_file = st.selectbox("选择一个 TXT 文件", txt_files)
+
+        st.markdown("### 显示设置")
+        display_mode = st.radio(
+            "展示模式",
+            ("列表模式", "卡片模式"),
+            key="display_mode",
+        )
 
         st.markdown("### 合并设置")
         repeat_times = int(
@@ -608,32 +648,65 @@ def main():
         )
         return
 
+    display_items = []
     if display_input_method == "直接输入":
         for i, audio in enumerate(audio_files, start=100):
-            txt = text_lines[i - 100]
-            st.markdown(
-                f"""
-                <div class="preview-card">
-                    <h3 class="preview-title">{txt}</h3>
-                </div>
-                """,
-                unsafe_allow_html=True,
+            display_items.append(
+                {
+                    "id": i,
+                    "audio": audio,
+                    "main_text": text_lines[i - 100],
+                    "sub_text": "",
+                }
             )
-            st.audio(audio)
     else:
         for i, audio in enumerate(audio_files, start=100):
-            eng = text_lines[(i - 100) * 2]
-            chn = text_lines[(i - 100) * 2 + 1]
+            display_items.append(
+                {
+                    "id": i,
+                    "audio": audio,
+                    "main_text": text_lines[(i - 100) * 2],
+                    "sub_text": text_lines[(i - 100) * 2 + 1],
+                }
+            )
+
+    if display_mode == "列表模式":
+        for item in display_items:
+            main_text_html = html.escape(item["main_text"])
+            sub_text_html = (
+                f"<div class='preview-subtitle'>{html.escape(item['sub_text'])}</div>"
+                if item["sub_text"]
+                else ""
+            )
             st.markdown(
                 f"""
                 <div class="preview-card">
-                    <h3 class="preview-title">{eng}</h3>
-                    <div class="preview-subtitle">{chn}</div>
+                    <h3 class="preview-title">{main_text_html}</h3>
+                    {sub_text_html}
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
-            st.audio(audio)
+            st.audio(item["audio"])
+    else:
+        card_cols = st.columns(3)
+        for idx, item in enumerate(display_items):
+            audio_data_uri = audio_file_to_data_uri(item["audio"])
+            main_text_html = html.escape(item["main_text"])
+            sub_text_html = (
+                f"<div class='word-sub'>{html.escape(item['sub_text'])}</div>"
+                if item["sub_text"]
+                else ""
+            )
+            card_html = f"""
+            <div class="word-card">
+                <div class="word-main">{main_text_html}</div>
+                {sub_text_html}
+                <audio class="audio-icon" controls preload="none" src="{audio_data_uri}"></audio>
+            </div>
+            """
+            with card_cols[idx % 3]:
+                st.markdown(card_html, unsafe_allow_html=True)
 
     merge_signature = (tuple(audio_files), repeat_times, repeat_gap_seconds, gap_seconds)
     if (
@@ -677,25 +750,26 @@ def main():
     except Exception as e:
         st.error(f"打包失败：{e}")
 
-    download_col1, download_col2 = st.columns(2)
-    if st.session_state.merged_mp3_data:
-        download_col1.download_button(
-            label="生成MP3",
-            data=st.session_state.merged_mp3_data,
-            file_name=st.session_state.merged_mp3_filename,
-            mime="audio/mpeg",
-            use_container_width=True,
-        )
+    with st.sidebar:
+        st.markdown("### 下载区")
+        if st.session_state.merged_mp3_data:
+            st.download_button(
+                label="生成MP3",
+                data=st.session_state.merged_mp3_data,
+                file_name=st.session_state.merged_mp3_filename,
+                mime="audio/mpeg",
+                use_container_width=True,
+            )
 
-    if st.session_state.zip_data:
-        download_col2.download_button(
-            label="下载所有文件（音频+列表+HTML）",
-            data=st.session_state.zip_data,
-            file_name=zip_filename,
-            mime="application/zip",
-            on_click=cleanup_after_download,
-            use_container_width=True,
-        )
+        if st.session_state.zip_data:
+            st.download_button(
+                label="下载所有文件（音频+列表+HTML）",
+                data=st.session_state.zip_data,
+                file_name=zip_filename,
+                mime="application/zip",
+                on_click=cleanup_after_download,
+                use_container_width=True,
+            )
 
 if __name__ == "__main__":
     main()
