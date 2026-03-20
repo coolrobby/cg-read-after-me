@@ -352,6 +352,166 @@ def generate_audios_batch(text_list: List[str], voice: str, speed: str, start_id
 # -------------------------------------------------
 # 6. HTML 生成
 # -------------------------------------------------
+def build_card_slider_html(cards):
+    cards_json = json.dumps(cards, ensure_ascii=False).replace("</", "<\\/")
+    html_content = """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>点读卡</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 8px 0;
+            font-family: "Times New Roman", serif;
+            background: transparent;
+        }
+        .slider {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .nav-btn {
+            width: 44px;
+            height: 44px;
+            border: 1px solid #d6e0ea;
+            border-radius: 999px;
+            background: #fff;
+            color: #2f577a;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .nav-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .card {
+            width: min(760px, calc(100vw - 140px));
+            min-height: 240px;
+            border: 1px solid #d8e1eb;
+            border-radius: 14px;
+            background: #fff;
+            box-shadow: 0 6px 18px rgba(18, 53, 92, 0.08);
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            text-align: center;
+        }
+        .english {
+            font-size: clamp(2rem, 3.2vw, 2.9rem);
+            color: #173e66;
+            line-height: 1.2;
+            word-break: break-word;
+        }
+        .chinese {
+            font-size: clamp(1.4rem, 2.3vw, 2rem);
+            color: #244f3a;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+        .audio-btn {
+            border: none;
+            border-radius: 999px;
+            background: #1d73b7;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 10px 18px;
+            cursor: pointer;
+        }
+        .audio-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        @media (max-width: 760px) {
+            body { padding: 6px 0; }
+            .slider { gap: 8px; }
+            .nav-btn {
+                width: 38px;
+                height: 38px;
+                font-size: 21px;
+            }
+            .card {
+                width: calc(100vw - 98px);
+                min-height: 214px;
+                padding: 18px 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="slider">
+        <button class="nav-btn" id="prev-btn" type="button" aria-label="上一张">&#8592;</button>
+        <div class="card">
+            <div class="english" id="english-text"></div>
+            <div class="chinese" id="chinese-text"></div>
+            <button class="audio-btn" id="audio-btn" type="button">播放音频</button>
+            <audio id="audio-player" preload="none"></audio>
+        </div>
+        <button class="nav-btn" id="next-btn" type="button" aria-label="下一张">&#8594;</button>
+    </div>
+    <script>
+        const cards = __CARD_DATA__;
+        let currentIndex = 0;
+
+        const englishEl = document.getElementById("english-text");
+        const chineseEl = document.getElementById("chinese-text");
+        const audioEl = document.getElementById("audio-player");
+        const audioBtn = document.getElementById("audio-btn");
+        const prevBtn = document.getElementById("prev-btn");
+        const nextBtn = document.getElementById("next-btn");
+
+        function renderCard() {
+            if (!cards.length) {
+                englishEl.textContent = "暂无卡片";
+                chineseEl.textContent = "";
+                audioEl.src = "";
+                audioBtn.disabled = true;
+                prevBtn.disabled = true;
+                nextBtn.disabled = true;
+                return;
+            }
+            const current = cards[currentIndex];
+            englishEl.textContent = current.english || "";
+            chineseEl.textContent = current.chinese || "（无中文）";
+            audioEl.src = current.audio || "";
+            audioBtn.disabled = !current.audio;
+            const disabled = cards.length <= 1;
+            prevBtn.disabled = disabled;
+            nextBtn.disabled = disabled;
+        }
+
+        function move(step) {
+            if (!cards.length) return;
+            currentIndex = (currentIndex + step + cards.length) % cards.length;
+            renderCard();
+        }
+
+        audioBtn.addEventListener("click", () => {
+            if (!audioEl.src) return;
+            audioEl.currentTime = 0;
+            audioEl.play();
+        });
+
+        prevBtn.addEventListener("click", () => move(-1));
+        nextBtn.addEventListener("click", () => move(1));
+
+        renderCard();
+    </script>
+</body>
+</html>
+"""
+    return html_content.replace("__CARD_DATA__", cards_json)
+
+
 def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
     cards = []
     if is_txt_input:
@@ -373,220 +533,7 @@ def generate_flashcard_html(audio_files, text_lines, is_txt_input=False):
                 }
             )
 
-    cards_json = json.dumps(cards, ensure_ascii=False).replace("</", "<\\/")
-    html_content = """
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>点读卡</title>
-    <style>
-        :root {
-            --bg-start: #f4f8ff;
-            --bg-end: #eef6f2;
-            --card-shadow: 0 20px 40px rgba(23, 59, 96, 0.16);
-            --card-radius: 20px;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: "Times New Roman", serif;
-            background: linear-gradient(150deg, var(--bg-start), var(--bg-end));
-            color: #16324f;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .viewer {
-            width: min(980px, 100%);
-            display: grid;
-            grid-template-columns: auto minmax(0, 1fr) auto;
-            gap: 14px;
-            align-items: center;
-        }
-        .nav-btn {
-            width: 52px;
-            height: 52px;
-            border: none;
-            border-radius: 999px;
-            background: #fff;
-            box-shadow: 0 10px 24px rgba(28, 70, 114, 0.18);
-            color: #1f4f7a;
-            font-size: 28px;
-            cursor: pointer;
-        }
-        .stage { width: 100%; }
-        .card-shell {
-            width: min(720px, 100%);
-            margin: 0 auto;
-            perspective: 1400px;
-        }
-        .slide-card {
-            position: relative;
-            width: 100%;
-            min-height: 350px;
-            transform-style: preserve-3d;
-            transition: transform 0.5s ease;
-            cursor: pointer;
-        }
-        .slide-card.is-flipped { transform: rotateY(180deg); }
-        .slide-face {
-            position: absolute;
-            inset: 0;
-            backface-visibility: hidden;
-            border-radius: var(--card-radius);
-            box-shadow: var(--card-shadow);
-            padding: 30px 28px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 16px;
-            background: #fff;
-        }
-        .slide-front { background: linear-gradient(165deg, #ffffff 0%, #f7fbff 100%); }
-        .slide-back {
-            transform: rotateY(180deg);
-            background: linear-gradient(170deg, #fefefe 0%, #f3f8f0 100%);
-        }
-        .english {
-            font-size: clamp(2rem, 3.4vw, 3rem);
-            line-height: 1.2;
-            word-break: break-word;
-        }
-        .chinese {
-            font-size: clamp(1.55rem, 2.8vw, 2.2rem);
-            color: #1f4d35;
-            line-height: 1.35;
-            word-break: break-word;
-        }
-        .audio-btn {
-            border: none;
-            border-radius: 999px;
-            background: #1867a9;
-            color: #fff;
-            font-size: 1rem;
-            font-weight: 700;
-            padding: 10px 18px;
-            width: fit-content;
-            cursor: pointer;
-        }
-        .tip { color: #59708a; font-size: 0.95rem; }
-        .footer {
-            margin-top: 14px;
-            text-align: center;
-            color: #31506e;
-            font-size: 1rem;
-            font-weight: 700;
-        }
-        @media (max-width: 760px) {
-            .viewer {
-                grid-template-columns: 1fr 1fr;
-                grid-template-rows: auto auto;
-                gap: 10px;
-            }
-            .stage {
-                grid-column: 1 / span 2;
-                grid-row: 1;
-            }
-            #prev-btn {
-                grid-column: 1;
-                grid-row: 2;
-                justify-self: start;
-            }
-            #next-btn {
-                grid-column: 2;
-                grid-row: 2;
-                justify-self: end;
-            }
-            .slide-card { min-height: 310px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="viewer">
-        <button class="nav-btn" id="prev-btn" type="button" aria-label="上一张">&#8592;</button>
-        <div class="stage">
-            <div class="card-shell">
-                <div class="slide-card" id="slide-card">
-                    <div class="slide-face slide-front">
-                        <div class="english" id="english-text"></div>
-                        <button class="audio-btn" id="audio-btn" type="button">播放音频</button>
-                        <audio id="audio-player" preload="none"></audio>
-                        <div class="tip">点击卡片翻到中文</div>
-                    </div>
-                    <div class="slide-face slide-back">
-                        <div class="chinese" id="chinese-text"></div>
-                        <div class="tip">点击卡片翻回英文</div>
-                    </div>
-                </div>
-            </div>
-            <div class="footer" id="counter"></div>
-        </div>
-        <button class="nav-btn" id="next-btn" type="button" aria-label="下一张">&#8594;</button>
-    </div>
-    <script>
-        const cards = __CARD_DATA__;
-        let currentIndex = 0;
-
-        const cardEl = document.getElementById("slide-card");
-        const englishEl = document.getElementById("english-text");
-        const chineseEl = document.getElementById("chinese-text");
-        const counterEl = document.getElementById("counter");
-        const audioEl = document.getElementById("audio-player");
-        const audioBtn = document.getElementById("audio-btn");
-        const prevBtn = document.getElementById("prev-btn");
-        const nextBtn = document.getElementById("next-btn");
-
-        function renderCard() {
-            if (!cards.length) {
-                englishEl.textContent = "暂无卡片";
-                chineseEl.textContent = "";
-                counterEl.textContent = "0 / 0";
-                audioBtn.disabled = true;
-                prevBtn.disabled = true;
-                nextBtn.disabled = true;
-                cardEl.classList.remove("is-flipped");
-                return;
-            }
-            const current = cards[currentIndex];
-            englishEl.textContent = current.english || "";
-            chineseEl.textContent = current.chinese || "（无中文）";
-            audioEl.src = current.audio || "";
-            counterEl.textContent = `${currentIndex + 1} / ${cards.length}`;
-            audioBtn.disabled = !current.audio;
-            cardEl.classList.remove("is-flipped");
-        }
-
-        function move(step) {
-            if (!cards.length) return;
-            currentIndex = (currentIndex + step + cards.length) % cards.length;
-            renderCard();
-        }
-
-        cardEl.addEventListener("click", () => {
-            if (!cards.length) return;
-            cardEl.classList.toggle("is-flipped");
-        });
-
-        audioBtn.addEventListener("click", (event) => {
-            event.stopPropagation();
-            if (!audioEl.src) return;
-            audioEl.currentTime = 0;
-            audioEl.play();
-        });
-
-        prevBtn.addEventListener("click", () => move(-1));
-        nextBtn.addEventListener("click", () => move(1));
-
-        renderCard();
-    </script>
-</body>
-</html>
-"""
-    html_content = html_content.replace("__CARD_DATA__", cards_json)
+    html_content = build_card_slider_html(cards)
     path = "flashcard.html"
     with open(path, "w", encoding="utf-8") as f:
         f.write(html_content)
@@ -657,42 +604,6 @@ def main():
             background: #f8fbff;
             padding: 22px;
             color: #4d6480;
-        }
-        .word-card {
-            border: 1px solid #dbe4f2;
-            border-radius: 16px;
-            background: linear-gradient(145deg, #ffffff 0%, #f7fbff 100%);
-            padding: 14px;
-            min-height: 142px;
-            position: relative;
-            box-shadow: 0 4px 10px rgba(29, 78, 137, 0.07);
-            margin-bottom: 12px;
-        }
-        .word-main {
-            font-family: "Times New Roman", serif;
-            font-size: 1.55rem;
-            color: #1f3c5a;
-            line-height: 1.25;
-            margin: 0 0 6px 0;
-            word-break: break-word;
-        }
-        .word-sub {
-            font-family: "Times New Roman", serif;
-            font-size: 1.05rem;
-            color: #4b647d;
-            line-height: 1.35;
-            margin: 0 0 38px 0;
-            word-break: break-word;
-        }
-        .audio-icon {
-            position: absolute;
-            right: 12px;
-            bottom: 12px;
-            width: 46px;
-            height: 34px;
-            border-radius: 999px;
-            background: #ffffff;
-            box-shadow: 0 4px 10px rgba(47, 128, 195, 0.18);
         }
         </style>
         """,
@@ -901,218 +812,12 @@ def main():
                 {
                     "english": item["main_text"],
                     "chinese": item["sub_text"] or "",
-                    "audio_uri": audio_file_to_data_uri(item["audio"]),
+                    "audio": audio_file_to_data_uri(item["audio"]),
                 }
             )
 
-        cards_json = json.dumps(cards_payload, ensure_ascii=False).replace("</", "<\\/")
-        card_component_html = """
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <style>
-        :root {
-            --card-shadow: 0 20px 40px rgba(23, 59, 96, 0.16);
-            --card-radius: 20px;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            font-family: "Times New Roman", serif;
-            background: linear-gradient(165deg, #f6fbff 0%, #edf6f0 100%);
-            color: #143453;
-            padding: 12px;
-        }
-        .viewer {
-            width: 100%;
-            display: grid;
-            grid-template-columns: auto minmax(0, 1fr) auto;
-            gap: 12px;
-            align-items: center;
-        }
-        .nav-btn {
-            width: 48px;
-            height: 48px;
-            border: none;
-            border-radius: 999px;
-            background: #fff;
-            box-shadow: 0 10px 24px rgba(28, 70, 114, 0.18);
-            color: #1f4f7a;
-            font-size: 28px;
-            cursor: pointer;
-        }
-        .stage { width: 100%; }
-        .card-shell {
-            width: min(760px, 100%);
-            margin: 0 auto;
-            perspective: 1400px;
-        }
-        .slide-card {
-            position: relative;
-            width: 100%;
-            min-height: 320px;
-            transform-style: preserve-3d;
-            transition: transform 0.5s ease;
-            cursor: pointer;
-        }
-        .slide-card.is-flipped { transform: rotateY(180deg); }
-        .slide-face {
-            position: absolute;
-            inset: 0;
-            backface-visibility: hidden;
-            border-radius: var(--card-radius);
-            box-shadow: var(--card-shadow);
-            padding: 26px 24px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 14px;
-            background: #fff;
-        }
-        .slide-front { background: linear-gradient(165deg, #ffffff 0%, #f7fbff 100%); }
-        .slide-back {
-            transform: rotateY(180deg);
-            background: linear-gradient(170deg, #fefefe 0%, #f3f8f0 100%);
-        }
-        .english {
-            font-size: clamp(2rem, 3.3vw, 3rem);
-            line-height: 1.2;
-            word-break: break-word;
-        }
-        .chinese {
-            font-size: clamp(1.45rem, 2.7vw, 2.1rem);
-            color: #1f4d35;
-            line-height: 1.35;
-            word-break: break-word;
-        }
-        .audio-btn {
-            border: none;
-            border-radius: 999px;
-            background: #1867a9;
-            color: #fff;
-            font-size: 0.98rem;
-            font-weight: 700;
-            padding: 10px 18px;
-            width: fit-content;
-            cursor: pointer;
-        }
-        .tip { color: #59708a; font-size: 0.95rem; }
-        .footer {
-            margin-top: 12px;
-            text-align: center;
-            color: #31506e;
-            font-size: 0.98rem;
-            font-weight: 700;
-        }
-        @media (max-width: 760px) {
-            .viewer {
-                grid-template-columns: 1fr 1fr;
-                grid-template-rows: auto auto;
-                gap: 8px;
-            }
-            .stage {
-                grid-column: 1 / span 2;
-                grid-row: 1;
-            }
-            #prev-btn {
-                grid-column: 1;
-                grid-row: 2;
-                justify-self: start;
-            }
-            #next-btn {
-                grid-column: 2;
-                grid-row: 2;
-                justify-self: end;
-            }
-            .slide-card { min-height: 300px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="viewer">
-        <button class="nav-btn" id="prev-btn" type="button" aria-label="上一张">&#8592;</button>
-        <div class="stage">
-            <div class="card-shell">
-                <div class="slide-card" id="slide-card">
-                    <div class="slide-face slide-front">
-                        <div class="english" id="english-text"></div>
-                        <button class="audio-btn" id="audio-btn" type="button">播放音频</button>
-                        <audio id="audio-player" preload="none"></audio>
-                        <div class="tip">点击卡片翻到中文</div>
-                    </div>
-                    <div class="slide-face slide-back">
-                        <div class="chinese" id="chinese-text"></div>
-                        <div class="tip">点击卡片翻回英文</div>
-                    </div>
-                </div>
-            </div>
-            <div class="footer" id="counter"></div>
-        </div>
-        <button class="nav-btn" id="next-btn" type="button" aria-label="下一张">&#8594;</button>
-    </div>
-    <script>
-        const cards = __CARD_DATA__;
-        let currentIndex = 0;
-
-        const cardEl = document.getElementById("slide-card");
-        const englishEl = document.getElementById("english-text");
-        const chineseEl = document.getElementById("chinese-text");
-        const counterEl = document.getElementById("counter");
-        const audioEl = document.getElementById("audio-player");
-        const audioBtn = document.getElementById("audio-btn");
-        const prevBtn = document.getElementById("prev-btn");
-        const nextBtn = document.getElementById("next-btn");
-
-        function renderCard() {
-            if (!cards.length) {
-                englishEl.textContent = "暂无卡片";
-                chineseEl.textContent = "";
-                counterEl.textContent = "0 / 0";
-                audioBtn.disabled = true;
-                prevBtn.disabled = true;
-                nextBtn.disabled = true;
-                cardEl.classList.remove("is-flipped");
-                return;
-            }
-            const current = cards[currentIndex];
-            englishEl.textContent = current.english || "";
-            chineseEl.textContent = current.chinese || "（无中文）";
-            audioEl.src = current.audio_uri || "";
-            counterEl.textContent = `${currentIndex + 1} / ${cards.length}`;
-            audioBtn.disabled = !current.audio_uri;
-            cardEl.classList.remove("is-flipped");
-        }
-
-        function move(step) {
-            if (!cards.length) return;
-            currentIndex = (currentIndex + step + cards.length) % cards.length;
-            renderCard();
-        }
-
-        cardEl.addEventListener("click", () => {
-            if (!cards.length) return;
-            cardEl.classList.toggle("is-flipped");
-        });
-
-        audioBtn.addEventListener("click", (event) => {
-            event.stopPropagation();
-            if (!audioEl.src) return;
-            audioEl.currentTime = 0;
-            audioEl.play();
-        });
-
-        prevBtn.addEventListener("click", () => move(-1));
-        nextBtn.addEventListener("click", () => move(1));
-
-        renderCard();
-    </script>
-</body>
-</html>
-"""
-        card_component_html = card_component_html.replace("__CARD_DATA__", cards_json)
-        components.html(card_component_html, height=460, scrolling=False)
+        card_component_html = build_card_slider_html(cards_payload)
+        components.html(card_component_html, height=320, scrolling=False)
 
 
     merge_signature = (tuple(audio_files), repeat_times, repeat_gap_seconds, gap_seconds)
