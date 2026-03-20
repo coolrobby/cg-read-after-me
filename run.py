@@ -6,6 +6,7 @@ import asyncio
 from typing import List
 import time
 import io
+from shutil import which
 from pydub import AudioSegment
 
 # -------------------------------------------------
@@ -92,6 +93,24 @@ def expand_abbreviations(text: str) -> str:
 def get_txt_files() -> List[str]:
     return [f for f in os.listdir() if f.endswith(".txt") and f != "requirements.txt"]
 
+_FFMPEG_READY = None
+_SILENCE_SEGMENT_CACHE = {}
+
+def ensure_ffmpeg_for_pydub() -> bool:
+    global _FFMPEG_READY
+    if _FFMPEG_READY is not None:
+        return _FFMPEG_READY
+
+    system_ffmpeg = which("ffmpeg")
+    if system_ffmpeg:
+        AudioSegment.converter = system_ffmpeg
+        AudioSegment.ffmpeg = system_ffmpeg
+        _FFMPEG_READY = True
+        return True
+
+    _FFMPEG_READY = False
+    return False
+
 def _strip_id3v1_tag(mp3_bytes: bytes) -> bytes:
     if len(mp3_bytes) >= 128 and mp3_bytes[-128:-125] == b"TAG":
         return mp3_bytes[:-128]
@@ -111,6 +130,106 @@ def _strip_leading_id3v2_tag(mp3_bytes: bytes) -> bytes:
         return b""
     return mp3_bytes[data_start:]
 
+def _parse_mp3_frames(mp3_bytes: bytes):
+    frame_info = []
+    idx = 0
+    while idx + 4 <= len(mp3_bytes):
+        b1, b2, b3, _ = mp3_bytes[idx], mp3_bytes[idx + 1], mp3_bytes[idx + 2], mp3_bytes[idx + 3]
+        if b1 != 0xFF or (b2 & 0xE0) != 0xE0:
+            idx += 1
+            continue
+
+        version_bits = (b2 >> 3) & 0x03
+        layer_bits = (b2 >> 1) & 0x03
+        bitrate_index = (b3 >> 4) & 0x0F
+        sample_rate_index = (b3 >> 2) & 0x03
+        padding = (b3 >> 1) & 0x01
+
+        if (
+            layer_bits != 0x01
+            or version_bits == 0x01
+            or bitrate_index in (0, 0x0F)
+            or sample_rate_index == 0x03
+        ):
+            idx += 1
+            continue
+
+        if version_bits == 0x03:  # MPEG1, Layer III
+            sample_rates = [44100, 48000, 32000]
+            bitrates = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0]
+            samples_per_frame = 1152
+            sample_rate = sample_rates[sample_rate_index]
+            bitrate = bitrates[bitrate_index] * 1000
+            frame_length = int((144 * bitrate) / sample_rate + padding)
+        elif version_bits == 0x02:  # MPEG2, Layer III
+            sample_rates = [22050, 24000, 16000]
+            bitrates = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0]
+            samples_per_frame = 576
+            sample_rate = sample_rates[sample_rate_index]
+            bitrate = bitrates[bitrate_index] * 1000
+            frame_length = int((72 * bitrate) / sample_rate + padding)
+        else:  # MPEG2.5, Layer III
+            sample_rates = [11025, 12000, 8000]
+            bitrates = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0]
+            samples_per_frame = 576
+            sample_rate = sample_rates[sample_rate_index]
+            bitrate = bitrates[bitrate_index] * 1000
+            frame_length = int((72 * bitrate) / sample_rate + padding)
+
+        if frame_length <= 0 or idx + frame_length > len(mp3_bytes):
+            idx += 1
+            continue
+
+        frame_info.append((idx, idx + frame_length, samples_per_frame / sample_rate))
+        idx += frame_length
+
+    return frame_info
+
+def build_silence_mp3_segment(gap_seconds: float) -> bytes:
+    if gap_seconds <= 0:
+        return b""
+
+    cache_key = round(gap_seconds, 3)
+    if cache_key in _SILENCE_SEGMENT_CACHE:
+        return _SILENCE_SEGMENT_CACHE[cache_key]
+
+    silence_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "silence_1s.mp3")
+    if not os.path.isfile(silence_path):
+        raise ValueError("缺少 silence_1s.mp3，无法在无 ffmpeg 环境插入间隔。")
+
+    with open(silence_path, "rb") as f:
+        silence_bytes = f.read()
+
+    silence_bytes = _strip_id3v1_tag(_strip_leading_id3v2_tag(silence_bytes))
+    frames = _parse_mp3_frames(silence_bytes)
+    if not frames:
+        raise ValueError("silence_1s.mp3 无有效 MP3 帧，无法用于间隔拼接。")
+
+    base_duration = sum(frame_duration for _, _, frame_duration in frames)
+    if base_duration <= 0:
+        raise ValueError("silence_1s.mp3 时长异常，无法用于间隔拼接。")
+
+    output = bytearray()
+    full_repeats = int(gap_seconds // base_duration)
+    remainder = max(gap_seconds - (full_repeats * base_duration), 0.0)
+
+    for _ in range(full_repeats):
+        output.extend(silence_bytes)
+
+    if remainder > 0:
+        elapsed = 0.0
+        end_pos = 0
+        for _, frame_end, frame_duration in frames:
+            end_pos = frame_end
+            elapsed += frame_duration
+            if elapsed >= remainder:
+                break
+        output.extend(silence_bytes[:end_pos])
+
+    segment = bytes(output)
+    _SILENCE_SEGMENT_CACHE[cache_key] = segment
+    return segment
+
 def merge_audio_files_to_mp3(audio_files: List[str], repeat_times: int = 3, gap_seconds: float = 2.0) -> bytes:
     if not audio_files:
         raise ValueError("没有可合并的音频文件。")
@@ -121,39 +240,47 @@ def merge_audio_files_to_mp3(audio_files: List[str], repeat_times: int = 3, gap_
 
     gap_ms = int(round(gap_seconds * 1000))
 
-    # 优先使用 pydub 重新编码，保证兼容性。
-    try:
-        merged_audio = AudioSegment.empty()
-        silence_segment = AudioSegment.silent(duration=gap_ms) if gap_ms > 0 else None
+    ffmpeg_ready = ensure_ffmpeg_for_pydub()
+    if ffmpeg_ready:
+        # 优先使用 pydub 重新编码，保证兼容性并支持行间静音。
+        try:
+            merged_audio = AudioSegment.empty()
+            silence_segment = AudioSegment.silent(duration=gap_ms) if gap_ms > 0 else None
 
-        for i, file_path in enumerate(audio_files):
-            one_line_audio = AudioSegment.from_file(file_path, format="mp3")
-            for _ in range(repeat_times):
-                merged_audio += one_line_audio
-            if silence_segment is not None and i < len(audio_files) - 1:
-                merged_audio += silence_segment
+            for i, file_path in enumerate(audio_files):
+                one_line_audio = AudioSegment.from_file(file_path, format="mp3")
+                for _ in range(repeat_times):
+                    merged_audio += one_line_audio
+                if silence_segment is not None and i < len(audio_files) - 1:
+                    merged_audio += silence_segment
 
-        buffer = io.BytesIO()
-        merged_audio.export(buffer, format="mp3")
-        return buffer.getvalue()
-    except Exception:
-        # 回退到二进制拼接，避免 ffmpeg 不可用时完全失败。
-        if gap_ms > 0:
-            raise ValueError("当前环境无法插入行间间隔（可能缺少 ffmpeg），请安装 ffmpeg 后重试，或把间隔设为 0 秒。")
+            buffer = io.BytesIO()
+            merged_audio.export(buffer, format="mp3")
+            return buffer.getvalue()
+        except Exception:
+            # 回退到二进制拼接，避免 ffmpeg 路径存在但处理失败时完全不可用。
+            pass
 
-        merged_bytes = bytearray()
-        for file_index, file_path in enumerate(audio_files):
-            with open(file_path, "rb") as f:
-                chunk = f.read()
-            chunk = _strip_id3v1_tag(chunk)
-            for repeat_index in range(repeat_times):
-                chunk_to_append = chunk
-                if file_index > 0 or repeat_index > 0:
-                    chunk_to_append = _strip_leading_id3v2_tag(chunk_to_append)
-                merged_bytes.extend(chunk_to_append)
-        if not merged_bytes:
-            raise ValueError("合并失败：无法读取任何音频数据。")
-        return bytes(merged_bytes)
+    # 无可用 ffmpeg 时，回退到二进制拼接，并通过 silence_1s.mp3 插入行间静音。
+    silence_gap_bytes = b""
+    if gap_ms > 0:
+        silence_gap_bytes = build_silence_mp3_segment(gap_seconds)
+
+    merged_bytes = bytearray()
+    for file_index, file_path in enumerate(audio_files):
+        with open(file_path, "rb") as f:
+            chunk = f.read()
+        chunk = _strip_id3v1_tag(chunk)
+        for repeat_index in range(repeat_times):
+            chunk_to_append = chunk
+            if file_index > 0 or repeat_index > 0:
+                chunk_to_append = _strip_leading_id3v2_tag(chunk_to_append)
+            merged_bytes.extend(chunk_to_append)
+        if silence_gap_bytes and file_index < len(audio_files) - 1:
+            merged_bytes.extend(silence_gap_bytes)
+    if not merged_bytes:
+        raise ValueError("合并失败：无法读取任何音频数据。")
+    return bytes(merged_bytes)
 
 # -------------------------------------------------
 # 4. 异步生成单条音频（带重试）
